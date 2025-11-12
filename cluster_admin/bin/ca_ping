@@ -1,0 +1,105 @@
+#!/bin/bash 
+
+IPS_FILE=/tmp/ping-nodes
+HOSTS_UP=$IPS_FILE-up
+HOSTS_DOWN=$IPS_FILE-down
+
+LIST=""
+TIMEOUT=200ms
+UP_NODES=si
+
+usage(){
+echo "
+usage
+
+cluster_ping -u|--up|-d|--down
+	show only up or down node.
+
+cluster_ping -l 
+	list nodes without stats.
+
+---
+$1"
+
+exit 255
+
+}
+
+while [ ! -z $1 ];do
+flag=$1
+case $flag in
+-debug)
+	set -x
+;;
+-l|--list)
+#list nodes without stats
+	LIST="y"	
+	;;
+-u|--up)
+	UP_NODES=si
+        ;;
+-d|--down)
+	DOWN_NODES=si
+	;;
+-n|--node)
+        shift
+        C_NODES=y
+        NODE_LIST=$1
+        NODES="$(nodeset -S, -e $1)"
+        [ $? -ne 0 ]  && usage  
+        ;;
+
+-g|--group)
+# group from $CIA_ROOT/config/node_groups
+        shift
+        GROUP=$(echo $1| tr a-z A-Z)
+        [ -z $GROUP ] && usage "group name missing"
+        [ ! -f $CIA_ROOT/config/node_groups/$GROUP ]  && usage "group "$GROUP" not exist"
+        NODE_LIST=$(nodeset -f < $CIA_ROOT/config/node_groups/$GROUP)
+        [ $? -ne 0 ]  && usage
+        ;;
+-*)
+	usage "invalid option $1"
+	;;
+*)
+	usage "invalid option $1"
+	;;
+esac
+shift
+done
+
+[ -z $NODE_LIST ] && 
+NODE_LIST=$(nodeset -f < $CIA_ROOT/config/node_groups/ALL)
+
+
+#clush -q -w $NODE_LIST -f 50 -L -o -oConnectTimeout=5 echo -e \$HOSTNAME is up 2> $HOSTS_DOWN 1>$HOSTS_UP 
+clush -q -L -b -w $NODE_LIST -f 50 -o "-oConnectTimeout=5 -q" echo  2> $HOSTS_DOWN 1>$HOSTS_UP 
+
+
+R_UP=$(cut -d: -f1 $HOSTS_UP)
+[ -z $R_UP ] && N_UP=0 || N_UP=$(nodeset -c $R_UP)
+
+R_DOWN=$(cut -d: -f2 $HOSTS_DOWN)
+[ -z $R_DOWN ] && N_DOWN=0 || N_DOWN=$(nodeset  -c $R_DOWN)
+
+if [ -z $LIST ] ;then
+echo "--------------------------------
+$N_UP nodes up:	
+ $(cut -d: -f1 $HOSTS_UP) 
+
+$N_DOWN nodes down:
+$(cut -d: -f2 $HOSTS_DOWN)
+___________________
+total nodes	$((N_UP+N_DOWN))"
+
+else
+[ ! -z $DOWN_NODES ] && echo $R_DOWN
+[ ! -z $UP_NODES ] && echo $R_UP
+
+fi
+
+
+rm -f $HOSTS_UP $HOSTS_DOWN
+
+exit 0
+

@@ -1,0 +1,118 @@
+#!/bin/bash 
+
+GROUP=""
+NUM_FILES="/tmp/files-cia"
+. $CIA_ROOT/funciones/funciones.cia 
+
+usage(){
+echo "
+
+Uso cluster_export [-g group name ] [ -n node name ]  <directory | files>
+
+Copia los archivos/directorio indicados para que sean copiados al nodo o grupo de nodos indicados.
+La copia se realiza de forma local al directorio $CIA_ROOT/nodes, en el caso de archivos para
+nodo, y en el directorio $CIA_ROOT/group  en el caso de un grupo de nodos.
+
+La copia de estos archivos hacia los nodos se lleva a cabo por el comando cluster_update
+
+En la configuración de cluster generalmente existen directorios que son compartidos, por ejemplo 
+los directorios /home y /opt.  Se deben evitar copiar por medio del comando cluster_export ya que esto 
+provocara una copia redundante e incluso la perdida de información tanto en el nodo maestro como en los
+nodos de cómputo.
+
+Ejemplos de uso:
+
+cluster_export -g gpu /etc/sysconfig/gpu 
+
+cluster_export -n node1 /etc/sysconfig/network 
+
+Si se omite el nombre de un grupo o nodo, la copia de los archivos se llevara a cabo en el grupo default
+definido en el archivo $CIA_ROOT/config/node_groups/DEFAULT
+
+
+$1"
+
+exit 1
+
+}
+
+[ -z "$1" ] &&  usage
+
+while :  ; do
+
+case $1 in
+
+-debug)
+	set -x 
+;;
+
+-a|-c)
+	GROUP=nodes/common
+;;
+-g)
+        shift
+        GROUP=$(echo $1| tr a-z A-Z)
+        [ -z $GROUP ] && usage "group name missing"
+        [ $GROUP == ALL ] && GROUP="nodes/common" && shift && continue
+        [ ! -f $CIA_ROOT/config/node_groups/$GROUP ]  && usage "group "$GROUP" not exist"
+        GROUP=groups/$GROUP
+;;
+
+-n)
+	shift
+	NODE=$1
+	[ -z $NODE ] && usage "node name missing"
+	FNAME=$(cia_return_full_name $NODE) 
+	[ -z $FNAME ] && echoerr "El nodo $NODE no esta definido." && exit 1
+	GROUP=nodes/$FNAME
+	;;
+ 
+-z)	
+	Z_COMM=echo 
+	
+;;
+-*)
+        usage "unknow option $1"
+
+;;
+*)
+        break
+;;
+
+esac
+
+shift
+
+done
+
+[ -z $1 ] && usage "missing names files..."
+
+if [ -z $GROUP ] ; then 
+	[ ! -f $CIA_ROOT/config/node_groups/DEFAULT ]  && usage "group \"$CIA_ROOT/config/node_groups/DEFAULT\" is not defined "
+GROUP=groups/DEFAULT 
+fi 
+
+> $NUM_FILES 
+
+## rango de nodos !!!
+for file in $@ ;do
+
+[ -d $file ] && 
+	find $file >>  $NUM_FILES  || 
+	echo $file >> $NUM_FILES
+
+done
+
+TOTAL=$(wc -l < $NUM_FILES)
+
+[ ! -e $CIA_ROOT/$GROUP ] && mkdir -p $CIA_ROOT/$GROUP 
+echo -n  export $TOTAL files to  $CIA_ROOT/$GROUP  
+
+tar cf - -T $NUM_FILES 2>/dev/null | tar xf - -C  $CIA_ROOT/$GROUP 
+
+echo " done"
+
+rm -f $NUM_FILES
+
+exit 0
+

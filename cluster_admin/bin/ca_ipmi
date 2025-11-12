@@ -1,0 +1,270 @@
+#!/bin/bash  
+
+. $CIA_ROOT/funciones/funciones.cia
+
+#--session-timeout=MILLISECONDS
+IPMI_TIMEOUT="--session-timeout=5000"
+IPMI_ID=ADMIN
+
+usage(){
+echo "
+uso:
+
+cluster_ipmi NODOS OPCIONES COMANDO
+
+NODOS:
+
+-g|--group      Ejecuta COMANDO en el grupo indicado 
+
+-n|--node       Ejecuta COMANDO en el nodo o rango de nodos indicado
+
+-ip		Ejecuta COMANDO en la ip o rango de ip's indicadas
+
+
+COMANDO:
+-boot		Forza el siguiente inicio al dispositivos indicado:  pxe | bios | disk 
+
+-on		Se envia la seña de encendido al servidor 
+
+-reset		Se envia la señal reset al servidor 
+
+-off		Se envia la señal de apagado al servidor
+
+-kvm		Se solicita KVM, es necesaria una sesión gráfica
+
+-sol		Se solicita la terminal serial (Serial Over Lan). El caracter de escape es \.
+		Para invocar la ayuda teclear la siguiente secuencia: 
+		tecla enter
+		\
+		?  
+		Para terminar la sesión teclear la siguiente secuencia:
+		tecla enter
+		\
+		.
+
+-i		Se envía COMANDO al dispositivo IPMI
+
+
+-status		Se consulta el estado del servidor		
+
+-sensors	Se consultan los sensores del servidor
+
+-pminfo		Se consultan el estado de las fuentes de poder en el servidor
+
+-sel		Se consultan los registros del dispositivo IPMI
+
+-power		Se solicita el consumo de energía de l servidor, valido para plataformas SM X9 y posteriores
+
+-idon		Se solicita el encendido del led indentificador del servidor
+
+-idoff		Se solicita el pagado del led identificadro del servidor 
+
+$1 "
+exit 255
+}
+
+return_node_list(){
+
+for nodet in $(nodeset -e $*); do
+
+if [ -z $IP_LIST ] ; then 
+node=$(cia_return_full_name $nodet)
+else
+node=$nodet
+fi 
+[ -z $node ] && continue 
+nodeip="$nodeip $(grep -m1 -w $node /etc/hosts.ipmi |  awk '{print $1}')"
+#[ -z $nodeip ] && echoerr "Nodo $node no se encuentra en /etc/hosts.ipmi"
+
+done
+echo $nodeip
+
+
+}
+
+[ -z "$1" ] &&  usage 
+
+while [ ! -z $1 ];do
+
+case $1 in 
+
+-debug)
+	set -x
+;;
+
+-n|--node) shift
+	[ -z "$1" ] &&  usage "no node name"
+	NODE_LIST=$1
+;;
+-g|--group)
+        shift
+	GROUP=$(echo $1| tr a-z A-Z)
+#        [ -z $GROUP ] && usage "group name missing"
+	[ -z "$1" ] &&  GROUP=DEFAULT
+        [ ! -f $CIA_ROOT/config/node_groups/$GROUP ]  && usage "group "$GROUP" not exist"
+	NODE_LIST=$(nodeset -f < $CIA_ROOT/config/node_groups/$GROUP )
+;;
+-on) 
+	IPMI_COMMAND="ipmi-power --on --wait-until-on"
+
+;;
+-reset) shift
+	IPMI_COMMAND="ipmi-power --reset"
+;;
+-off) 
+	IPMI_COMMAND="ipmi-power --off --wait-until-off"
+;;
+-soft)
+	IPMI_COMMAND="ipmi-power --soft --wait-until-off"
+
+;; 
+
+
+-idon|--idon) 
+	IPMI_COMMAND="ipmi-chassis --chassis-identify=FORCE"
+;;
+-idoff|--idoff)
+#        FREEIPMI="--chassis-identify=1"
+        IPMI_COMMAND="ipmi-chassis --chassis-identify=TURN-OFF"
+        IPMI_COMMAND="ipmi-chassis --chassis-identify=3"
+;;
+-id)
+	shift
+	OPT=$1
+	[ "$OPT" != "on" ] && [ "$OPT" != "off" ]  && usage "on | off"
+	[ "$OPT" == "on" ] && OPT=FORCE
+	[ "$OPT" == "off" ] && OPT=TURN-OFF
+	IPMI_COMMAND="ipmi-chassis --chassis-identify=$OPT"
+;;
+-kvm) 
+	KVM=1
+	IPMI=SMCIPMITool
+	IPMI_COMMAND="ukvm"
+
+;;
+
+-boot)	shift
+	IPMI=ipmitool
+        BOOTDEV=$1
+	[ "$BOOTDEV" != "bios" ] &&  [ "$BOOTDEV" != "pxe" ] && [ "$BOOTDEV" != "disk" ] && usage "bios | pxe | disk" 
+        IPMI_COMMAND="chassis bootdev $BOOTDEV"
+
+;;
+
+-sol)   
+	IPMI=ipmitool
+	SOL=1
+        IPMI_COMMAND="-e \\ sol activate"
+	clear
+;;
+
+-i) shift
+        IPMI=ipmitool
+	IPMI_COMMAND="$*"
+
+;;
+
+-s|-status)
+	IPMI_COMMAND="ipmi-power --stat" 
+;;
+
+-sel|--sel)
+	[ "$2" == "clear" ] && shift && CLEAR="--clear"
+	IPMI_COMMAND="ipmi-sel $CLEAR" 
+;;
+
+-sensors)
+	IPMI_COMMAND="ipmi-sensors"
+;;
+
+-power)
+	IPMI=SMCIPMITool
+#	IPMI_COMMAND="ipmi-oem IntelNM get-node-manager-statistics | grep Current | column -t"
+	IPMI_COMMAND="nm20 oemGetPower"
+;;
+-pminfo)
+	IPMI=SMCIPMITool
+	IPMI_COMMAND=pminfo 
+;;
+
+-x)
+	shift
+	[ -z "$1" ] &&  usage "no node name"
+	EXCLUDE_COMMAND="-x $1"
+;;
+
+-ip|--ip)
+	shift
+	[ -z "$1" ] && usage "ip range"
+	IP_LIST=si
+	NODE_LIST=$1
+;;
+-debug)
+	set -x
+	echo "==$#++++$*"
+;;
+
+-z)
+	Z_COMM=echo 
+;;
+
+-*)
+	usage  "unknow option $1"
+;;
+esac 
+shift
+done
+
+[ "$IPMI_COMMAND"  == ""  ] &&  usage "no command"
+#[ "$NODE_LIST"  == ""  ] &&  usage "no node name"
+
+if [ -z "$NODE_LIST" ] ; then 
+
+[ -f $CIA_ROOT/config/node_groups/DEFAULT ]  && NODE_LIST=$(nodeset -f < $CIA_ROOT/config/node_groups/DEFAULT ) || usage "Empty node list or all requested nodes are down "
+
+fi
+
+
+[ ! -z $KVM ] && [ $(nodeset -c $NODE_LIST) -gt 1 ]  && usage "kvm command not valir for a range of nodes"
+[ ! -z $SOL ] && [ $(nodeset -c $NODE_LIST) -gt 1 ]  && usage "sol command not valir for a range of nodes"
+
+
+NODE_LIST=$(nodeset -e $NODE_LIST $EXCLUDE_COMMAND)
+[ $? -ne 0 ] && usage "Rango de nodos no valido"
+
+for node in $NODE_LIST ; do
+
+[ -z $IP_LIST ] &&  node=$(cia_return_full_name $node)
+[ -z $IP_LIST ] && ip_node=$(cia_return_ipmi_ip $node) || ip_node=$node
+[ -z $IP_LIST ] && name=$(cia_return_ipmi_name $node ) || name=$node
+
+echo  "---$node---"
+case $IPMI in
+
+ipmitool)
+$Z_COMM 		ipmitool $IPMI_COMMAND -U $IPMI_ID -P $IPMI_ID -I lanplus -H $ip_node
+		[ ! -z $SOL ] && reset 
+;;
+
+local)
+		
+$Z_COMM		cluster_exec -n $node $IPMI_COMMAND 
+;;
+
+SMCIPMITool)
+$Z_COMM 		$CIA_ROOT/cia_utils/SMCIPMITool/SMCIPMITool $ip_node $IPMI_ID $IPMI_ID $IPMI_COMMAND
+;;
+
+ipmicfg)
+$Z_COMM         cluster_exec -n $node $CIA_ROOT/cia_utils/IPMICFG/ipmicfg-linux.x86_64.static $IPMI_COMMAND
+;;
+
+'')
+$Z_COMM		$IPMI_COMMAND  $IPMI_TIMEOUT -u $IPMI_ID -p $IPMI_ID -h $ip_node
+;;
+
+esac
+
+#echo
+done 
+

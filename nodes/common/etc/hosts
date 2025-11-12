@@ -1,0 +1,19 @@
+127.0.0.1	localhost	localhost.localdomain
+172.17.253.253	 absa master nfsmaster pbsmaster
+172.17.1.1	nodo1	node1  n1
+172.17.1.2	nodo2	node2  n2
+172.17.1.3	nodo3	node3  n3
+172.17.1.4	nodo4	node4  n4
+172.17.1.5	nodo5	node5  n5
+172.17.1.6	nodo6	node6  n6
+172.17.1.7	nodo7	node7  n7
+172.17.1.8	nodo8	node8  n8
+
+172.19.1.1      ibnodo1 ibn1 ib1
+172.19.1.2      ibnodo2 ibn2 ib2
+172.19.1.3      ibnodo3 ibn3 ib3
+172.19.1.4      ibnodo4 ibn4 ib4
+172.19.1.5      ibnodo5 ibn5 ib5
+172.19.1.6	ibnodo6	ibn6 ib6
+172.19.1.7	ibnodo7	ibn7 ib7
+172.19.1.8	ibnodo8	ibn8 ib8

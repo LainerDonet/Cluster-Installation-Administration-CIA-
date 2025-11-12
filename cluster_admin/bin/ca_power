@@ -1,0 +1,102 @@
+#!/bin/bash 
+
+PIPE=
+NODES=
+GROUP=ALL
+
+usage(){
+echo "
+error:
+uso cluster_power < -n node | -g GROUP_NAME >  < on | off | reboot> 
+
+on	encender los nodos indicados con -n o -g 
+
+off	apagar los nodos indicados con -n o -g
+
+reboot	reiniciar los nodos indicados con -n o -g
+
+
+ej:
+cluster_power off
+
+apagara a todos los nodos de cómputo del cluster 
+
+$1 "
+exit 255
+}
+
+NODE_LIST=""
+while [ ! -z $1 ];do
+flag=$1
+case $flag in
+
+-debug)
+	set -x 
+	;;
+
+-g|--group)
+# group from $CIA_ROOT/config/node_groups
+        shift
+        GROUP=$(echo $1| tr a-z A-Z)
+        [ -z $GROUP ] && usage "group name missing"
+        [ ! -f $CIA_ROOT/config/node_groups/$GROUP ]  && usage "group "$GROUP" not exist"
+        NODES="$NODE_LIST $(cat $CIA_ROOT/config/node_groups/$GROUP | xargs)"
+	NODE_LIST=$(nodeset -f $NODES)
+	[ $? -ne 0 ]  && usage  
+        ;;
+-n|--node)
+        shift
+	C_NODES=y
+        NODE_LIST=$1
+	[ -z $1 ] && usage 
+	NODES="$(nodeset -S, -e $1)"
+	[ $? -ne 0 ]  && usage  
+        ;;
+
+-h|--help)
+        usage
+        ;;
+-*)
+        usage "invalid option $1"
+        ;;
+*)
+        ACTION=$1
+        [ "$ACTION" != "on" ] && [ "$ACTION" != "off" ] && [ "$ACTION" != "reboot" ]  && usage "unknow action $SHOW"
+        PERFORM_ACTION=$ACTION
+        ;;
+esac
+shift
+done
+
+#[ -z "$NODE_LIST" ] && NODES="all nodes" 
+#|| NODES=$NODE_LIST
+[ -z "$NODE_LIST" ] && NODE_LIST="$(cat $CIA_ROOT/config/node_groups/ALL | xargs | nodeset -f )" 
+[ -z "$PERFORM_ACTION" ] && usage "no command request"
+
+echo  "*** cluster_power $(echo $PERFORM_ACTION | tr a-z A-Z ) on:
+$NODE_LIST "
+while : ; do
+read -p "procced (y/n) :" -n 1 resp
+echo 
+[ "$resp" == "n" ]  && exit
+[ "$resp" == "y" ]  &&  break
+
+done
+
+if [ $PERFORM_ACTION == 'on'  ] ; then 
+	for node in $(nodeset -e $NODES) ; do 
+        cluster_ipmi -n $node -on 
+	done 
+elif [ $PERFORM_ACTION == 'off'  ] ; then
+
+	cluster_exec -n $NODE_LIST poweroff
+
+else
+	cluster_exec -n $NODE_LIST reboot 
+
+fi
+
+
+exit 0
+
+

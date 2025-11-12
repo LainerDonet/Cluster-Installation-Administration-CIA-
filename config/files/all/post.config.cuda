@@ -1,0 +1,19 @@
+#!/bin/bash 
+
+[ -e /root/.cia-post.config ] && exit 0 
+
+rpm -ivh  /usr/cia-7.0/cia_utils/RPMS/$(uname -i)/cuda/*.rpm 
+cp /usr/cia-7.0/config/files/all/cuda /etc/init.d/
+
+chkconfig --add cuda
+chkconfig cuda on
+
+echo "
+export MANPATH=/usr/local/cuda/doc/man:$MANPATH
+export PATH=/usr/local/cuda/bin:\$PATH
+export LD_LIBRARY_PATH=/usr/local/cuda/lib64:\$LD_LIBRARY_PATH
+" > /etc/profile.d/cuda.sh
+
+touch  /root/.cia-post.config 
+
+

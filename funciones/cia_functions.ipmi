@@ -1,0 +1,153 @@
+#!/bin/bash 
+
+returnAdminMac(){
+
+IP_IPMI=$1
+ipmitool -U ADMIN -P ADMIN -H $IP_IPMI  raw 0x30 0x21 | tr " " : | cut -d : -f6-11
+}
+
+setIpmiStatic(){
+IP_IPMI=$1
+ipmitool -U ADMIN -P ADMIN -H $IP_IPMI  lan set 1 ipsrc static
+}
+
+setIpmiDhcp(){
+IP_IPMI=$1
+ipmitool -U ADMIN -P ADMIN -H $IP_IPMI  lan set 1 ipsrc dhcp
+}
+
+
+setIpmiDedicated(){
+IP_IPMI=$1
+ipmitool -U ADMIN -P ADMIN -H $IP_IPMI  raw 0x30 0x70 0x0c 1 0
+}
+
+setIpmiOnboard(){
+IP_IPMI=$1
+ipmitool -U ADMIN -P ADMIN -H $IP_IPMI  raw 0x30 0x70 0x0c 1 1
+}
+
+setIpmiFailover(){
+IP_IPMI=$1
+ipmitool -U ADMIN -P ADMIN -H $IP_IPMI  raw 0x30 0x70 0x0c 1 2
+}
+
+setIpmiBootPxe(){
+IP_IPMI=$1
+ipmitool -U ADMIN -P ADMIN -H $IP_IPMI chassis bootdev pxe
+
+}
+
+setIpmiBootDisk(){
+IP_IPMI=$1
+ipmitool -U ADMIN -P ADMIN -H $IP_IPMI chassis bootdev disk
+
+}
+
+setIpmiReset(){
+IP_IPMI=$1
+ipmitool -U ADMIN -P ADMIN -H $IP_IPMI chassis power reset
+
+}
+
+setIpmiPowerOff(){
+IP_IPMI=$1
+ipmitool -U ADMIN -P ADMIN -H $IP_IPMI chassis power off
+
+}
+
+
+setIpmiBootBios(){
+IP_IPMI=$1
+ipmitool -U ADMIN -P ADMIN -H $IP_IPMI chassis bootdev bios
+
+}
+
+setIpmiUid5(){                                             
+IP_IPMI=$1                                                  
+                                                            
+ipmitool -U ADMIN -P ADMIN -H $IP_IPMI chassis  identify 5   
+                                                            
+}                                                           
+
+
+setIpmiUid15(){
+IP_IPMI=$1
+
+ipmitool -U ADMIN -P ADMIN -H $IP_IPMI chassis  identify
+
+}
+
+setIpmiUid60(){
+IP_IPMI=$1
+
+ipmitool -U ADMIN -P ADMIN -H $IP_IPMI chassis  identify 60
+
+}
+
+
+setIpmiUidOn(){
+IP_IPMI=$1
+
+ipmitool -U ADMIN -P ADMIN -H $IP_IPMI chassis  identify  force
+
+}
+
+setIpmiUidOff(){
+IP_IPMI=$1
+
+ipmitool -U ADMIN -P ADMIN -H $IP_IPMI chassis  identify  0
+
+}
+
+setIpmiPowerOn(){
+IP_IPMI=$1
+ipmitool -U ADMIN -P ADMIN -H $IP_IPMI chassis power on
+
+}
+
+setIpmiPowerStatus(){
+IP_IPMI=$1
+ipmitool -U ADMIN -P ADMIN -H $IP_IPMI chassis power status
+
+}
+
+
+setIpmiIp(){
+OLD_IPMI=$1
+NEW_IPMI=$2
+
+ipmitool -U ADMIN -P ADMIN -H $OLD_IPMI lan set 1 ipaddr $NEW_IPMI
+
+}
+
+setIpmiSol(){
+IP_IPMI=$1
+clear
+ipmitool -U ADMIN -P ADMIN -H $IP_IPMI -I lanplus -e \\ sol activate 
+reset
+}
+
+setIpmiCommand(){
+IP_IPMI=$1
+shift
+ipmitool -U ADMIN -P ADMIN -H $IP_IPMI $*
+
+}
+
+setIpmiKvm(){
+IP_IPMI=$1
+
+cd $CIA_ROOT/funciones/kvm
+java -jar SMCIPMITool.jar $IP_IPMI ADMIN ADMIN ukvm
+cd - &>/dev/null
+}
+
+checkIpmi(){
+NODE_IPMI=$1
+NODE_NAME=$2
+echoerr "** Probe IPMI ADDR ($NODE_IPMI) for node $NODE_NAME ..."
+ping -c 3 -t 2 $NODE_IPMI > /dev/null
+return $?
+}
+

@@ -1,0 +1,9 @@
+#vie may  7 13:39:40 CDT 2021
+#absa np=24
+
+nodo1 np=24 num_node_boards=1
+nodo2 np=24 num_node_boards=1
+nodo3 np=24 num_node_boards=1
+nodo4 np=28 num_node_boards=1
+nodo5 np=24 num_node_boards=1
+nodo7 np=48 num_node_boards=1

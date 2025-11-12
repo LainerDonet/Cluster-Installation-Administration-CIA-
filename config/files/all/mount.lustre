@@ -1,0 +1,12 @@
+#!/bin/bash 
+
+[ ! -e /LUSTRE/home ] && mkdir -p /LUSTRE/home 
+[ ! -e /LUSTRE/data ] && mkdir -p /LUSTRE/data
+
+chmod 1777 /LUSTRE/home
+chmod 1777 /LUSTRE/data
+
+echo "mounting lustre ..." 
+mount.lustre -v 172.19.253.240@o2ib0:/HOME /LUSTRE/home
+mount.lustre -v 172.19.253.240@o2ib0:/DATA /LUSTRE/data
+

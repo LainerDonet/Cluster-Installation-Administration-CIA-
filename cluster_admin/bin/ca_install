@@ -1,0 +1,397 @@
+#!/bin/bash 
+trap exit 1 2 5  
+
+
+. $CIA_ROOT/funciones/funciones.cia
+IPMI=si 
+
+usage(){
+echoerr "
+uso  cluster_install  
+
+-a   |--add	   Agregar el  nodo indicado con -n
+-r   |--reinstall  Reinstalar el nodo indicado con -n
+-n   |--node	   Nombre del nodo a procesar: ej.  node1
+-i   |--install	   Instalar el nodo indicado con -n
+-ipmi|--ipmi	   El nodo indicado con -n cuenta con interface IPMI  
+-mac |--mac	   Dirección MAC del nodo indicado con -n 
+-ip  |--ip	   Dirección IP del nodo indicado con -n 
+-c   |--config	   Generar configuración KS y PXE 
+-d   |--delete     Borra el registro del nodo indicado con -n
+-l   |--list       Lista los nodos en el sistema 
+-no-ipmi
+-text
+-cmdline
+-vnc
+-sol
+-graphic           Modo  de instalación  
+-torque
+-cuda
+-lustre|--home-lustre
+-nfs|--home-nfs
+-shell 
+
+---
+$1"
+
+exit 255
+
+}
+
+del_node(){
+NODE_NAME=$1
+#NODE_NAME=$(cia_return_full_name $NODE_NAME)
+
+V_ADD=$(cia_return_ip $NODE_NAME)
+if [  -z $V_ADD ] ; then
+	echoerr "### El nodo $NODE_NAME ($V_ADD) no esta definido" 
+	#return
+else
+	cia_del_ip $V_ADD $NODE_NAME 
+	cia_del_groups $NODE_NAME
+fi
+V_ADD=$(cia_return_mac $NODE_NAME)
+if [ -z $V_ADD ] ; then 
+	echoerr "### El nodo  $NODE_NAME ($V_ADD) no tiene asignada direccion MAC..."
+        #return
+else
+	cia_del_mac $NODE_NAME
+fi
+
+
+}
+
+list_installed_nodes(){
+
+for file in $(ls -rt $CI_ROOT/tftpboot/pxelinux/pxelinux.cfg/01-*); do
+
+MAC=$(basename $file  | cut -d- -f2-7 | tr - :)
+
+cia_return_name $MAC
+
+done 
+
+}
+
+reinstall_node(){
+
+NODE_NAME=$1
+#NODE_NAME=$(cia_return_full_name $NODE_NAME)
+V_ADD=$(cia_return_ip $NODE_NAME)
+[ -z $V_ADD ] && echoerr "++++++El nodo $NODE_NAME ($V_ADD) no esta definido" && return
+V_ADD=$(cia_return_mac $NODE_NAME)
+if [ -z $V_ADD ] ;then
+        echoerr "++++++El nodo  $NODE_NAME ($V_ADD) no tiene asignada dirección MAC... "
+	return
+fi
+
+MAC=$(cia_return_mac $NODE_NAME)
+PXENAME=$CI_ROOT/tftpboot/pxelinux/pxelinux.cfg/01-$(echo $MAC | tr : -)
+
+if [ ! -e  $PXENAME ] ; then
+	 echoerr "El nodo $NODE_NAME no ha sido instalado."
+else
+	rm $PXENAME
+	echoerr "Archivo $PXENAME borrado"
+	install_node $NODE_NAME
+fi
+
+} 
+
+
+install_node(){
+NODE_NAME=$1
+V_ADD=$(cia_return_ip $NODE_NAME)
+[ -z $V_ADD  ] && echoerr "### El nodo $NODE_NAME no esta definido" && return 2
+NODE_IP=$(cia_return_ip $NODE_NAME)
+echoerr "### El nodo $NODE_NAME ($NODE_IP) ya esta definido"
+V_ADD=$(cia_return_mac $NODE_NAME)
+if [  -z $V_ADD ] ;then
+        echoerr "### El nodo  $NODE_NAME ($V_ADD) no tiene asignada direccion MAC..."
+	return
+fi
+
+MAC=$(cia_return_mac $NODE_NAME)
+PXENAME=$CI_ROOT/tftpboot/pxelinux/pxelinux.cfg/01-$(echo $MAC | tr : -)
+
+if [  -e  $PXENAME ] ; then
+         echoerr "### El nodo $NODE_NAME ya fue instalado"
+	return 2
+fi
+
+config_node $NODE_NAME
+cluster_update -q 
+echo "
+##########################################
+Instalando nodo $NODE_NAME - $NODE_IP - $NODE_MAC
+##########################################
+"
+if [ -z $NOIPMI ] ; then 
+## verificar funcionamiento ipmi
+IPMI_IP=$(returnIpmiIP $NODE_IP)
+checkIpmi $IPMI_IP $NODE_NAME 
+if [ $? -ne 0 ] ; then 
+echoerr "###IPMI error !!!" 
+exit 1  
+fi 
+## establecer boot en PXE
+setIpmiBootPxe $IPMI_IP
+setIpmiUid60 $IPMI_IP
+
+if [ "$(setIpmiPowerStatus $IPMI_IP)" == "Chassis Power is on" ] ; then
+	echoerr "Reiniciando nodo $NODE_NAME"
+        setIpmiReset $IPMI_IP
+else
+	echoerr "Encendiendo '$NODE_NAME' "
+        setIpmiPowerOn $IPMI_IP
+
+fi
+
+else 
+echoerr "## Encender '$NODE_NAME'. El primer dispositivo de arranque debe ser PXE" 
+fi
+########  
+########
+
+
+bash $CIA_ROOT/funciones/config.node.admin $NODE_NAME 
+#[ ! -z $SOL ] && setIpmiSol $IPMI_IP 
+
+}
+
+config_node(){
+NODE_NAME=$1
+#NODE_NAME=$(cia_return_full_name $NODE_NAME)
+V_ADD=$(cia_return_ip $NODE_NAME)
+[ -z $V_ADD ] && echoerr "## El nodo '$NODE_NAME' ($V_ADD) no esta definido" && return
+V_ADD=$(cia_return_mac $NODE_NAME)
+if [ ! -z $V_ADD ] ;then
+        echoerr "## El nodo '$NODE_NAME' ($V_ADD) ya tiene asignada una dirección MAC"
+        
+else
+        echoerr "## El nodo  '$NODE_NAME' ($V_ADD) no tiene asignada dirección MAC"
+	return
+fi
+echo "
+##########################################
+Configurando nodo $NODE_NAME - $NODE_IP - $NODE_MAC
+##########################################
+"
+
+[ -z $GUI ] && GUI=sol
+bash  $CIA_ROOT/funciones/config.node.ks $NODE_NAME  no no 
+bash  $CIA_ROOT/funciones/config.node.tftp $NODE_NAME $GUI 
+
+}
+
+
+add_node(){
+NODE_NAME=$1
+#NODE_NAME=$(cia_return_full_name $NODE_NAME)
+echo "
+##########################################
+Agregando nodo $NODE_NAME - $NODE_IP - $NODE_MAC
+##########################################
+"
+V_ADD=$(cia_return_ip $NODE_NAME)
+[ ! -z $V_ADD ] && echoerr "### El nodo '$NODE_NAME' ($V_ADD) ya esta definido"  
+V_ADD=$(cia_return_mac $NODE_NAME)
+if [ ! -z $V_ADD ] ;then 
+	echoerr "### El nodo '$NODE_NAME' ($V_ADD) ya tiene asignada una dirección MAC" 
+	return
+else 
+	echoerr "### El nodo  '$NODE_NAME' ($V_ADD) no tiene asignada dirección MAC... continuando"
+fi
+
+[ -z $NODE_IP ] && NODE_IP=$(cia_return_ip_plus_one)
+[ -z $GUI ] && GUI=sol
+#agregar a hosts
+cia_update_hosts_ipmi $NODE_IP $NODE_NAME
+cia_update_hosts_ib $NODE_IP $NODE_NAME
+cia_setup_hosts $NODE_IP $NODE_NAME
+#cia_update_hosts_cia $NODE_IP $NODE_NAME
+cia_update_hosts_equiv  $NODE_NAME
+cia_update_hosts_cluster $NODE_NAME
+cia_update_rhosts $NODE_NAME
+cia_update_node_cia $NODE_NAME
+
+bash $CIA_ROOT/funciones/config.node.ks $NODE_NAME  no no 
+if [ -z $NODE_MAC ] ; then
+	if [ ! -z $IPMI ];then
+		NODE_IPMI=$(returnIpmiIP $NODE_IP )
+####		
+checkIpmi $NODE_IPMI $NODE_NAME 
+if [ $? -eq 0 ] ; then
+NODE_MAC=$(cia_getmac_ipmi $NODE_NAME $NODE_IPMI )
+setIpmiUid15 $NODE_IPMI 
+else
+echo "configurando interface IPMI..."
+bash $CIA_ROOT/funciones/config.node.ipmi $NODE_NAME $NODE_IP $CIA_INSTALL_DEVICE $NODE_IPMI 
+NODE_MAC=$(cia_getmac_ipmi $NODE_NAME $NODE_IPMI )
+fi
+####
+	else
+	NODE_MAC=$(cia_getmac_no_ipmi $NODE_NAME)
+	fi
+fi
+
+[ -z $NODE_MAC ] && exit 1
+
+cia_check_node_mac $NODE_MAC || usage "++++++la dirección $NODE_MAC ya esta definida para otro nodo"
+cia_add_node $NODE_NAME $NODE_IP $NODE_MAC 
+
+bash $CIA_ROOT/funciones/config.node.tftp $NODE_NAME $GUI 
+
+}
+
+#################################################################
+#################################################################
+
+[ -z $1 ] && usage 
+
+while [ ! -z $1 ];do
+flag=$1
+case $flag in
+-i|--install)
+	INSTALL=si
+        ;;
+-r|--reinstall)
+        REINSTALL=si
+        ;;
+-c|--config)
+	CONFIG=si
+	;;
+-g|--get-mac)
+	shift
+	NODE=$1
+        [ -z $NODE ] && usage
+	GETMAC=$NODE
+	;;
+-a|--add)
+	ADD=si
+	;;
+-d|--del)
+	DEL=si
+	;;
+-gui|--gui)
+        shift
+	GUI=$1 
+	[ -z $1 ] && usage "los valores aceptados para gui son: text (default), vnc, cmdline, graphic "
+        ;;
+
+-h|--help)
+        usage
+        ;;
+-n|--node)
+        shift
+	[ -z $1 ] && usage "invalid node name"
+	NODE_LIST=$1        
+        ;;
+-debug)
+	set -x	
+;;
+-noipmi|-no-ipmi|--no-ipmi)
+	export NOIPMI=si
+	unset IPMI 
+	;;
+-sol|--sol)
+        KERNEL_CIA_OPT="$KERNEL_CIA_OPT console=ttyS1,115200" 
+	GUI=sol	
+        ;;
+-text|--text)
+        KERNEL_CIA_OPT="$KERNEL_CIA_OPT text"       
+        GUI=text
+	;;
+-cmdline|--cmdline)
+        KERNEL_CIA_OPT="$KERNEL_CIA_OPT cmdline "
+        GUI=cmdline
+	;;
+-vnc|--vnc)
+        KERNEL_CIA_OPT="$KERNEL_CIA_OPT vnc"
+        GUI=vnc
+	;;
+-graphic|--graphic)
+        KERNEL_CIA_OPT="$KERNEL_CIA_OPT graphic"
+        GUI=graphic
+	  ;;
+
+-gpu|--gpu|-cuda|--cuda)
+	KERNEL_CIA_OPT="$KERNEL_CIA_OPT CIA.GPU CIA.CUDA xdriver=vesa nomodeset"
+	;;
+-ib|--infiniband)
+	KERNEL_CIA_OPT="$KERNEL_CIA_OPT CIA.IB"
+	;;
+-shell|--shell)
+	KERNEL_CIA_OPT="$KERNEL_CIA_OPT CIA.SHELL sshd " 
+	;;
+-lustre|--lustre|--home-lustre)
+	KERNEL_CIA_OPT="$KERNEL_CIA_OPT CIA.LUSTRE" 
+	;;
+-nfs|--nfs|--home-nfs)
+        KERNEL_CIA_OPT="$KERNEL_CIA_OPT CIA.NFS"
+        ;;
+-torque|--torque)
+	KERNEL_CIA_OPT="$KERNEL_CIA_OPT CIA.TORQUE"
+	;;
+
+-mac|--mac)
+        shift
+	returnValidMac $1
+	[ $? -ne 0 ] && exit
+        export NODE_MAC=$1
+	;;
+-ip|--ip)
+	shift 
+	returnValidIP $1
+	[ $? -ne 0 ] && exit
+	export NODE_IP=$1
+	;;
+-x)
+        shift
+        [ -z "$1" ] &&  usage "falta nombre del nodo"
+        EXCLUDE_LIST="$1"
+        EXCLUDE_COMMAND="-x $EXCLUDE_LIST"
+	;;
+
+-l|--list)
+	shift
+	if [ "$1" == "install" ] ;then 
+		list_installed_nodes 
+		#list_installed_nodes | sort -n 
+	else  
+		cat $CIA_MAC_FILE  
+	fi
+	exit
+	;;
+-*|*)
+        usage "invalid option $1"
+        ;;
+esac
+shift
+done
+
+export KERNEL_CIA_OPT 
+[ -z $NODE_LIST ] && usage "Falta nombre del nodo"
+NODES="$(nodeset -e $NODE_LIST $EXCLUDE_COMMAND)"
+
+[ -z "$NODES" ] && usage "Error en la lista de nodos"
+
+if [ -z $REINSTALL ] && [  -z $ADD ] && [  -z $INSTALL ] && [  -z $CONFIG ] && [ -z $ADD ] && [ -z $DEL ] ; then 
+	usage "Falta una acción"
+fi
+
+for node in $NODES ; do 
+ 	[ ! -z $ADD ] && add_node $node
+	nodet=$(cia_return_full_name $node)
+	[ -z $nodet ] && usage "El nodo \"$node\" no esta definido"
+	node=$nodet
+ 	[ ! -z $DEL ] && del_node $node
+ 	[ ! -z $INSTALL ] && install_node $node
+ 	[ ! -z $REINSTALL ] && reinstall_node $node
+ 	[ ! -z $CONFIG ] && config_node $node
+	NODE_IP=""
+	NODE_MAC=""
+done
+
+
+

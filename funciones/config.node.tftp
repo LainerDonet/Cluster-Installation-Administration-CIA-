@@ -1,0 +1,53 @@
+#!/bin/bash  -x 
+trap exit 1 2 5  
+
+[ -z $CIA_ROOT ] && exit
+
+
+. $CIA_ROOT/funciones/funciones.cia
+
+
+NODE_NAME=$1
+GUI_INSTALL=$2
+NODE_IP=$3
+NODE_MAC=$4
+ROOT_DIR=$5
+SETUP_TFTP=$6
+
+[ -z $NODE_IP ] && NODE_IP=$(cia_return_ip $NODE_NAME)
+[ -z $ROOT_DIR ] && ROOT_DIR=$CI_ROOT
+INSTALL_DEVICE=$CIA_INSTALL_DEVICE
+[ -z $NODE_MAC ] && NODE_MAC=$(cia_return_mac $NODE_NAME)
+
+LOCAL_IP=$(returnDeviceIP $INSTALL_DEVICE) 
+returnValidIP $LOCAL_IP 2>/dev/null || exit 
+NODE_NETMASK=$(returnNetmaskIP $NODE_IP)
+LOCAL_DNS=$(returnLocalDns)
+PXE_FILE=$(returnPxeFile $NODE_IP $ROOT_DIR)
+
+HTTP_DIR=http://$LOCAL_IP/cia-repo
+KS_FILE=http://$LOCAL_IP/cia-kickstart/${NODE_NAME}.ks 
+
+if [ ! -z $SETUP_TFTP ] ;then 
+	 setupTftp $ROOT_DIR 
+         setupSyslinux $ROOT_DIR
+         #service xinetd restart
+echo "Probando la conexión al medio http proporcionado: $HTTP_DIR "
+wget -q $HTTP_DIR/isolinux/isolinux.cfg -O /tmp/isolinux.cfg
+
+if [ $? -ne 0 ] ;then 
+	echo "...ERROR"
+	exit 1
+else
+	echo "...OK"
+	rm /tmp/isolinux.cfg
+
+wget -q $HTTP_DIR/isolinux/vmlinuz -O $ROOT_DIR/tftpboot/pxelinux/boot/x86_64/vmlinuz
+wget -q $HTTP_DIR/isolinux/initrd.img -O $ROOT_DIR/tftpboot/pxelinux/boot/x86_64/initrd.img
+fi
+
+fi 
+
+setupPxeBoot $NODE_IP $NODE_NETMASK $LOCAL_IP $LOCAL_DNS $NODE_MAC $HTTP_DIR $KS_FILE $GUI_INSTALL > $PXE_FILE
+
+

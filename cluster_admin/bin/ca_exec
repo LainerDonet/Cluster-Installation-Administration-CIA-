@@ -1,0 +1,142 @@
+#!/bin/bash 
+
+PIPE=
+NODES=
+GROUP=DEFAULT
+
+usage(){
+echo "
+uso:
+
+usage cluster_exec OPCIONES COMANDO
+
+OPCIONES:
+
+-g|--group	Ejecuta COMANDO en el grupo indicado 
+
+-n|--node	Ejecuta COMANDO en el nodo o rango de nodos indicado
+
+-p|--parrallel	Ejecuta COMANDO en de forma paralela en el # de nodos indicado. Por default 10
+	
+-b		Agrupa la salida estandar de COMANDO 
+
+-B		Agrupa la salida estandar de COMANDO incluyendo el error estandar
+
+-x|--exclude	Excluye de la ejecución al nodo o rango de nodos indicado
+
+-tty		Forza el uso de pseudo-terminal para la ejecución de COMANDO
+
+-a|--available	Ejecuta COMANDO en los nodos disponibles reportados por el comando cluster_ping
+
+-z		No realiza ninguna ejecución, solo muestra COMANDO 
+
+$1 "
+exit 255
+}
+
+NODE_LIST=""
+while [ ! -z $1 ];do
+flag=$1
+case $flag in
+-debug)
+	set -x
+;;
+
+-g|--group)
+# group from $CIA_ROOT/config/node_groups
+        shift
+        GROUP=$(echo $1| tr a-z A-Z)
+        [ -z $GROUP ] && usage "group name missing"
+        [ ! -f $CIA_ROOT/config/node_groups/$GROUP ]  && usage "group "$GROUP" not exist"
+	NODE_LIST=$(nodeset -f < $CIA_ROOT/config/node_groups/$GROUP)
+	[ $? -ne 0 ]  && usage  
+        ;;
+-n|--node)
+        shift
+	C_NODES=y
+        NODE_LIST=$1
+	NODES="$(nodeset -S, -e $1)"
+	[ $? -ne 0 ]  && usage  
+        ;;
+
+
+-h|--help)
+        usage
+        ;;
+-p|--parallel)
+        shift
+        P_NODES=y
+        N_NODES=$1
+        TEMP_N=$1
+        let TEMP_N++
+        [ $? -ne 0 ] && usage "#nodes $N_NODES not valid"
+	N_NODES="-f $N_NODES"
+;;
+
+-t)
+        shift
+	T_NODES=$1
+        TEMP_N=$1
+        let TEMP_N++
+        [ $? -ne 0 ] && usage "timeout $N_NODES not valid"
+	T_OPT="-t $T_NODES"
+
+;;
+-b) 
+	b_OPT="-b" 
+	;;
+-B)
+	B_OPT="-B"
+	;;
+-y)
+	Y_OPT=y
+	;;
+-x|--exclude)
+        shift
+        XNODE_LIST=$1
+        XNODES="$(nodeset -S, -e $1)"
+        [ $? -ne 0 ]  && usage
+
+        X_OPT="-x $XNODES"
+        ;;
+
+-a|--available)	
+	AVAIL=si
+	;;
+-z)
+	TEST_COMM=echo
+	;;
+-q)
+	#ajustar para forzar  pseudoterminales 
+	#Q_OPT="-q -L -o -q"
+	;;
+-tty)
+	TTY_OPT="--options=-tt"
+	;;
+-*)
+        usage "invalid option $1"
+        ;;
+*)
+        break
+;;
+
+esac
+shift
+done
+
+[ ! -z $AVAIL ] && NODE_LIST=$(cluster_ping -l --up -g $GROUP)
+
+COMMAND="$*"
+
+[ -z "$COMMAND" ] && usage 
+if [ -z "$NODE_LIST" ] ; then 
+
+[ -f $CIA_ROOT/config/node_groups/DEFAULT ]  && NODE_LIST=$(nodeset -f < $CIA_ROOT/config/node_groups/DEFAULT ) || usage "Empty node list or all requested nodes are down "
+
+fi
+
+$TEST_COMM clush $TTY_OPT $b_OPT $B_OPT $X_OPT  $T_OPT $N_NODES -w $NODE_LIST $COMMAND
+
+exit 0
+
+

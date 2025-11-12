@@ -1,0 +1,362 @@
+#!/bin/bash 
+
+export ROOT_DIR=$(dirname $PWD)
+
+ayuda(){
+echo -e "
+-h|--help					Muestra la ayuda
+
+-n|--node-name			Nombre del nodo
+
+-ip|--ip-nodo				Dirección IP del nodo 
+
+-d|--device 				Interfase de red a usar para la instalación	
+
+-os|--os-dir 				Directorio con la distribución a instalar 
+
+-part|--part-setup			Se requiere particionamiento personalizado
+
+-pack|--packages-setup		Se requiere selección de paquetes personalizado
+
+-cmd|--install-cmd				Instalación modo depuración 
+
+-text|--install-text			Instalación modo texto
+
+-graphic|--install-graphic		Instalación modo gráfico 
+
+-vnc|--install-vnc 				Instalación modo vnc 
+
+-noipmi|--no-ipmi			El nodo no cuenta con dispositivo IPMI
+
+-ipmi|--ipmi-ip 			Dirección IPMI del nodo a instalar 
+
+-sol|--ipmi-sol   			Iniciar sesión Serial Over Lan  SOL durante la instalación
+
+-config-ipmi| --config-ipmi  Configurar la interfase IPMI con la dirección IP de la opción --ipmi-ip
+
+-mac|--node-mac 			Dirección MAC del nodo a instalar 
+
+-bios|--boot-bios			Forzar inicio en BIOS 
+
+-pxe|--boot-pxe 			Forzar inicio en PXE
+ 
+-disk|--boot-disk 			Forzar inicio en Disco
+
+-desktop|--install-desktop		Instalación maquina de escritorio
+
+-server|--install-server		Instalación servidor
+
+-minimal|--install-minimal		Instalación minima / partición 50GB 
+
+-master|--install-master		Instalación nodo maestro
+
+-node|--install-node			Instalación nodo cómputo
+
+-memtest|--memtest			Instalación nodo cómputo
+
+
+La forma más rápida de llevar a cabo la instalación de un nodo es invocando este script
+de la siguiente forma
+
+./install.node -os <directorio de la distribución> -ip <dirección IP del nodo>
+
+Se utilizan los siguientes valores default:
+--device eth0
+--node-name lserver
+--install-vnc
+--boot-pxe
+--install-node 
+
+A partir de la dirección IP que se asignará al nodo, sl script tratará de asignar una 
+dirección al dispositivo IPMI del nodo en base a las siguientes reglas:
+
+IP                 IPMI
+172.17.XXX.YYY     172.16.XXX.YYY
+
+Es necesario que la interfase de instalación tenga configurada una dirección IP en el mismo
+segmento 172.17.XXX.YYY y en el segmento 172.16.XXX.YYY. 
+
+Para tener 2 direcciónes IP en una misma interfase de red se puede asignar una "alias" con la
+segunda dirección IP:
+
+ifconfig eth0:1 172.16.XXX.YYY
+
++
+$1
+"
+exit 
+}
+
+uso(){
+
+	echo $1
+	exit
+}
+
+#######################################################################
+###
+###
+#######################################################################
+
+export CIA_ROOT=$(dirname $PWD)
+[ ! -e funciones.cia ]  && uso "Ejecutar el script en el mismo directorio donde se encuentra el archivo funciones.cia"
+
+. $CIA_ROOT/funciones/funciones.cia
+
+[ -z $1 ]  && ayuda
+
+export NODE_NAME=lserver
+export CIA_INSTALL_DEVICE=eth0
+export GUI_INSTALL=sol
+export BOOT_PXE=si
+export PACK_SETUP=no
+export PART_SETUP=no
+export INSTALL=node
+export SOL=no
+
+while [ ! -z $1 ] ; do
+case $1 in
+
+-h|--help)
+ayuda
+;;
+#-d)
+#set +x 
+#;;
+
+-n|--node-name)
+shift
+#
+#NOMBRE DEL NODO
+NODE_NAME=$1
+
+;;
+
+-ip|--ip-nodo)
+shift
+#
+#IP DEL NODO. A PARTIR DE ESTA INFORMACION SE DETERMINA NETMASK Y GATEWAY
+NODE_IP=$1
+returnValidIP $NODE_IP || uso 
+;;
+
+-d|--device)
+shift
+#
+#INTERFASE DE RED A UTILIZAR PARA LA INSTALACION
+CIA_INSTALL_DEVICE=$1
+;;
+
+-os|--os-dir)
+shift
+#
+#DIRECTORIO CON LA ESTRUCTURA DE REPOSITORIO DE INSTALACION 
+REPO_DIR=$1
+
+[ ! -e  $REPO_DIR/isolinux/isolinux.cfg ] &&  uso "El directorio $REPO_DIR no 
+contiene los archivos para la instalación"
+
+;;
+
+-part|--part-setup)
+#
+#PREGUNTAR DURANTE LA INSTALACION POR EL ESQUEMA DE PARTICIONAMIENTO si/no
+PART_SETUP=si
+;;
+
+-pack|--packages-setup)
+#
+#PREGUNTAR DURANTE LA INSTALACION POR LA SELECCION DE PAQUETES si/no
+PACK_SETUP=si 
+INSTALL=none
+;;
+
+-cmd|--install-cmd)
+#
+#TIPO DE INSTALACION A REALIZAR: cmd, text, graphic, vnc
+GUI_INSTALL=cmd
+;;
+-text|--install-text)
+#
+#TIPO DE INSTALACION A REALIZAR: cmd, text, graphic, vnc
+GUI_INSTALL=text
+;;
+-rescue|--install-rescue)
+GUI_INSTALL=rescue
+;;
+-graphic|--install-graphic)
+#
+#TIPO DE INSTALACION A REALIZAR: cmd, text, graphic, vnc
+GUI_INSTALL=SI
+;;
+-vnc|--install-vnc)
+#
+#TIPO DE INSTALACION A REALIZAR: cmd, text, graphic, vnc
+GUI_INSTALL=vnc
+;;
+
+-noipmi|--no-ipmi)
+NO_IPMI=SI
+;;
+
+-ipmi|--ipmi-ip)
+shift
+IPMI_IP=$1
+returnValidIP $IPMI_IP || uso 
+
+;;
+-config-ipmi| --config-ipmi)
+CONFIG_IPMI=SI
+;;
+#
+-mac|--node-mac)
+shift
+NODE_MAC=$1
+returnValidMac $NODE_MAC || uso
+;;
+#
+-bios|--boot-bios)
+BOOT_BIOS=SI
+;;
+-pxe|--boot-pxe)
+BOOT_PXE=SI
+;;
+-disk|--boot-disk)
+BOOT_DISK=SI
+;;
+
+-desktop|--install-desktop)
+INSTALL=desktop
+;;
+
+-server|--install-server)
+INSTALL=server
+;;
+
+-master|--install-master)
+INSTALL=server
+;;
+
+-node|--install-node)
+INSTALL=node
+;;
+
+
+-minimal|--install|minimal)
+INSTALL=minimal
+;;
+
+-sol|--ipmi-sol)
+SOL=si
+;;
+
+-memtest|--memtest)
+export MEMTEST=si
+#REPO_DIR=/boot
+;;
+
+-*)
+        uso "unknow option $1"
+;;
+
+*)
+        break
+;;
+
+esac
+
+shift
+
+done
+
+[ -z $REPO_DIR ] && uso "Falta directorio de instalación"
+
+[ -z $NODE_IP ] &&  uso "Falta dirección IP del nodo"
+
+[ -z $CIA_INSTALL_DEVICE ] && uso "Falta interfase de red a utilizar"
+
+IP_DEV=$(returnDeviceIP $CIA_INSTALL_DEVICE)  || uso  
+
+echo -n "
+###########################################
+VALORES  PARA LA CONFIGURACION
+###########################################
+
+NODE_NAME=$NODE_NAME
+NODE_IP=$NODE_IP
+CIA_INSTALL_DEVICE=$CIA_INSTALL_DEVICE
+REPO_DIR=$REPO_DIR
+GUI_INSTALL=$GUI_INSTALL
+PACK_SETUP=$PACK_SETUP
+PART_SETUP=$PART_SETUP
+INSTALL=$INSTALL
+NO_IPMI=$NO_IPMI
+IPMI_IP=$IPMI_IP
+CONFIG_IPMI=$CONFIG_IPMI
+NODE_MAC=$NODE_MAC
+BOOT_BIOS=$BOOT_BIOS
+BOOT_PXE=$BOOT_PXE
+BOOT_DISK=$BOOT_DISK
+SOL=$SOL
+############################################################
+Utilizando interfase $CIA_INSTALL_DEVICE con ip $IP_DEV 
+$(ifconfig eth0 | grep -w inet)
+
+estos valores son correctos  Ok ? 
+
+presionar control+c para cancelar.
+### "
+
+read
+
+#configurar IPMI 
+ 
+if [ -z $NO_IPMI  ] && [ ! -z $CONFIG_IPMI ] ; then
+	IPMI_IP=$(returnIpmiIP $NODE_IP)
+echo "###
+Configurando interfase ipmi $IPMI_IP 
+###"
+	bash config.node.ipmi $NODE_NAME $NODE_IP $CIA_INSTALL_DEVICE $IPMI_IP
+	[ $? -ne 0  ] && exit 
+fi 
+
+#obtener MAC del nodo
+if [ -z $NO_IPMI ]  ; then
+
+[ -z $IPMI_IP ] && IPMI_IP=$(returnIpmiIP $NODE_IP)
+checkIpmi $IPMI_IP $NODE_NAME 
+if [ $? -ne 0 ] ; then 
+echo "no ipmi resonse  $IPMI_IP. Try use --no-ipmi or --config-ipmi " 
+exit
+fi
+
+[ -z $NODE_MAC ] && NODE_MAC=$(cia_getmac_ipmi $NODE_NAME $IPMI_IP)
+
+[ ! -z $BOOT_BIOS ] && setIpmiBootBios $IPMI_IP
+[ ! -z $BOOT_PXE ] && setIpmiBootPxe $IPMI_IP
+[ ! -z $BOOT_DISK ] && setIpmiBootDisk $IPMI_IP
+
+setIpmiUid60 $IPMI_IP
+if [ "$(setIpmiPowerStatus $IPMI_IP)" == "Chassis Power is on" ] ; then
+        setIpmiReset $IPMI_IP
+else
+        setIpmiPowerOn $IPMI_IP
+fi
+
+else
+[ -z $NODE_MAC ] && NODE_MAC=$(cia_getmac_no_ipmi $NODE_NAME 1)
+fi
+
+bash  config.node.repo $NODE_IP $REPO_DIR $ROOT_DIR/cluster_install
+[ $? -ne 0 ] && exit 
+
+bash config.node.ks $NODE_NAME $PART_SETUP $PACK_SETUP $NODE_IP $NODE_MAC  $ROOT_DIR/cluster_install $INSTALL 
+
+bash  config.node.tftp $NODE_NAME $GUI_INSTALL  $NODE_IP $NODE_MAC  $ROOT_DIR/cluster_install SETUP 
+[ $? -ne 0 ] && exit 
+
+bash  config.node.admin $NODE_NAME $NODE_IP $NODE_MAC $SOL $GUI_INSTALL 
+
+echo "-_[]_-"
+########################################################################################
+

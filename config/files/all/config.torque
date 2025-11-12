@@ -1,0 +1,55 @@
+#!/bin/bash 
+
+if grep -q -w CIA.TORQUE /proc/cmdline ; then 
+
+rpm -ivh $CIA_ROOT/cia_utils/RPMS/$(uname -i)/munge/*.rpm 
+
+if grep -q -w CIA.CUDA /proc/cmdline ; then 
+
+rpm -ivh  $CIA_ROOT/cia_utils/RPMS/$(uname -i)/torque/gpu/*.rpm 
+
+else 
+
+rpm -ivh $CIA_ROOT/cia_utils/RPMS/$(uname -i)/torque/*.rpm 
+
+fi
+
+
+cat $CIA_ROOT/config/files/all/pbs_mom.sysconfig > /etc/sysconfig/pbs_mom
+
+
+if [ -e /var/lib/torque/mom_priv/ ];then
+echo "nodes=0-1" > /var/lib/torque/mom_priv/mom.layout
+echo "\$pbsserver pbsmaster" > /var/lib/torque/mom_priv/config
+echo "\$usecp *:/home /home" >> /var/lib/torque/mom_priv/config
+fi
+
+
+chown munge.munge /etc/munge/munge.key 
+rpm -e torque-server 
+chkconfig trqauthd on
+chkconfig munge on
+chkconfig pbs_mom on
+
+echo "#%PAM-1.0
+auth       required     pam_sepermit.so
+auth       include      password-auth
+account    required     pam_nologin.so
+account    required     pam_pbssimpleauth.so debug 
+account    required     pam_access.so
+account    include      password-auth
+password   include      password-auth
+# pam_selinux.so close should be the first session rule
+session    required     pam_selinux.so close
+session    required     pam_loginuid.so
+# pam_selinux.so open should only be followed by sessions to be executed in the user context
+session    required     pam_selinux.so open env_params
+session    optional     pam_keyinit.so force revoke
+session    include      password-auth
+" > /etc/pam.d/sshd 
+
+else 
+curl -s "$MASTER_IP/$HOSTNAME#CIA_POST:WITHOUT-TORQUE####################" &>/dev/null
+
+fi 
+

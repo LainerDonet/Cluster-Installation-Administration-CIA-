@@ -1,0 +1,14 @@
+#!/bin/bash
+
+if grep -q -w CIA.LUSTRE /proc/cmdline ; then exit ; fi
+
+
+rmdir  /home
+mkdir /data 
+ln -s /NFS/home /home
+cat<<EOF >> /etc/storage.cia
+home      --fstype=nfs,nfsvers=3,tcp,rsize=8192,wsize=8192,hard,intr,timeo=600,rw  172.17.253.253:/home
+EOF
+
+#echo "/NFS    /etc/home.cia --timeout=600 --ghost" >> /etc/auto.master
+

@@ -1,0 +1,66 @@
+#!/bin/bash 
+
+exec < /dev/tty1 > /dev/tty1
+chvt 1
+
+NODE_NAME=$1
+NODE_IP=$2 
+NODE_NETMASK=$3 
+NODE_MAC=$4
+CIA_ROOT=$5
+MASTER_IP=$6
+
+[ $# -ne 6 ] && exit 
+
+DIR_CIA=$(basename $CIA_ROOT)
+
+ln -s /NFS/$DIR_CIA $CIA_ROOT
+ 
+
+cat<<EOF >> /etc/storage.cia
+#opt	 --fstype=nfs,nfsvers=3,tcp,rsize=8192,wsize=8192,hard,intr,timeo=600,ro nfsmaster:/opt
+$DIR_CIA	--fstype=nfs,nfsvers=3,tcp,rsize=8192,wsize=8192,hard,intr,timeo=600,ro $MASTER_IP:$CIA_ROOT
+EOF
+
+echo "/NFS    /etc/storage.cia --timeout=600 --ghost" > /etc/auto.master
+chkconfig autofs on 
+
+#echo "Copy file's configuration"
+#curl -s "$MASTER_IP/$HOSTNAME#CIA_POST:COPY-FILES####################" &>/dev/null 
+#echo "change to /" 
+#cd /
+#cp -dRf /cia/nodes/common/* .
+#[ -e /cia/nodes/$NODE_NAME/ ] && cp -dRf /cia/nodes/$NODE_NAME/* .
+
+export CIA_ROOT=/cia
+for file in /cia/cluster_install/bin/config.* ; do
+echo "####################################################"
+echo "#bash -x $file "
+echo "####################################################"
+	curl  -s "$MASTER_IP/$HOSTNAME#CIA_POST:$file++++++++++++++++++++++++++++" &>/dev/null 
+
+	bash -x $file  
+done
+
+type nproc
+if [ $? -eq 0 ] ; then 
+	if  ! grep -w -q $HOSTNAME /cia/config/nodes.nproc  ; then 
+		echo "$HOSTNAME np=$(nproc --all) num_node_boards=1" >> /cia/config/nodes.nproc
+	fi
+fi
+
+PXENAME=01-$(echo $NODE_MAC | tr : -)
+echo "Fix $PXENAME file ..."
+cat<<END > /cia/cluster_install/tftpboot/pxelinux/pxelinux.cfg/$PXENAME
+default localboot
+display display.msg
+
+label localboot
+        LOCALBOOT 0
+END
+
+echo "done"
+
+chvt 1
+
+

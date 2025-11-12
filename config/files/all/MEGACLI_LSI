@@ -1,0 +1,430 @@
+   Link: start contents
+   Link: home: Home
+   Link: search: Advanced Search
+   Link: contents: Directory
+   Link: canonical
+
+                                thatlinuxbox.com
+
+   Dan Stoner's Personal Blog, Photos, and More
+
+     ----------------------------------------------------------------------
+
+     ----------------------------------------------------------------------
+
+   Welcome to thatlinuxbox.com Tuesday, May 06 2014 @ 12:31 PM EDT
+
+   Home > Linux, Open Source, and Tech Stuff
+
+LSI MegaRAID - megacli
+
+     * Sunday, December 05 2010 @ 09:21 PM EST
+     * Contributed by: Dan Stoner
+     * Views: 61,476
+   Linux, Open Source, and Tech Stuff
+
+   Share
+     * Facebook
+     * Twitter
+     * Reddit
+     * LinkedIn
+     * StumbleUpon
+     * Google Bookmarks
+     * Digg
+     * Fark
+     * Del.icio.us
+
+   I recently gained my first experience with the infamous MegaCli command
+   line configuration utility for LSI-based RAID controllers. This utility
+   apparently also works on re-branded LSI cards from Dell (certain PERC
+   cards) and other vendors.  Our New servers from iXsystems included LSI
+   9260 MegaRAID adapters. These servers run FreeBSD and LSI makes a binary
+   available for this operating system.  I later noticed that megacli is also
+   in the FreeBSD ports tree, appears to be the same version as what I
+   downloaded from LSI, but I did not test it.  The megacli utility is also
+   available in standard repos for many Linux distributions.
+
+   I wanted to verify that the RAID controller would start an automatic
+   rebuild.  I popped out one of the drives and the very loud alarm started
+   screaming.  I waited a little bit and put the drive back in.  The alarm
+   continued and the array did not start rebuilding.  It turns out that the
+   controller has some self-defense against someone mistakenly re-inserting a
+   bad drive so it won't start an automatic rebuild on a drive that was just
+   disconnected and reconnected.  Drives that were previously in an array are
+   marked as "Foreign" if they are reinserted. Replacing a drive with a true
+   spare drive off the shelf triggers an auto-rebuild just fine (unless the
+   adapter's auto-rebuild property has been altered).
+
+   I have noticed that the binary I downloaded from the LSI web site is mixed
+   case, whereas the version included in many distrubutions / built from
+   source tends to use all lower-case (megacli).  Be aware of this if you
+   copy/paste commands from below.
+
+   So back to the screaming alarm...  
+
+   Here is the magic command to silence the alarm:
+
+    # MegaCli -AdpSetProp -AlarmSilence -aALL
+
+   Note that this does not permanently disable the alarm, it just silences
+   the current alarm.  If there is another RAID event (such as when you
+   replace the failed drive and a rebuild begins!), the alarm will begin
+   again (which is why I ended up putting the silence command in a shell
+   script on each of my servers).
+
+    
+
+   Generally, MegaCli commands take the following form:
+
+    # MegaCli <-command>   [other arguments or directives]  -a<adapter
+   identifier>
+
+    
+   I find that I have to escape the various bracket characters with a
+   backslash.
+
+    # MegaCli -pdInfo -PhysDrv \[252:7\]  -aALL
+
+    # MegaCli -AdpSetProp \{RebuildRate -60\} -aALL
+
+   I have only one adapter in each of my servers, so I can use "-aALL" to
+   indicate all adapters.  If you have more than one adapter you might need
+   to specify it by number such as "-a0".  Some commands do not work against
+   multiple adapters and require the specific adapter identifier.
+
+    
+
+   Display all information about all RAID adapter / settings:
+
+    # MegaCli -AdpAllinfo  -aALL
+
+   Display information about all physical drives:
+
+    # MegaCli -PDList  -aALL
+
+   Display information about all logical / virtual drives:
+
+    # MegaCli -LDGetProp -LALL -aALL
+
+    
+
+   To manipulate a particular physical device, MegaCli wants it to be
+   addressed by Enclosure and Slot.
+
+     E = Enclosure Device ID
+
+     S = Slot Number
+
+   For example, a valid device id might be [252:7].
+
+   Slot Number is typically the number on the front of the drive caddy or bay
+   (0..7).
+
+    # MegaCli -pdInfo -PhysDrv \[252:7\] -aALL
+
+   Enclosure Device ID: 252
+
+   Slot Number: 7
+
+   Device Id: 15
+
+   Sequence Number: 16
+
+   Media Error Count: 0
+
+   Other Error Count: 0
+
+   Predictive Failure Count: 0
+
+   Last Predictive Failure Event Seq Number: 0
+
+   PD Type: SAS
+
+   Raw Size: 136.732 GB [0x11177330 Sectors]
+
+   Non Coerced Size: 136.232 GB [0x11077330 Sectors]
+
+   Coerced Size: 136.218 GB [0x11070000 Sectors]
+
+   Firmware state: Online, Spun Up
+
+   SAS Address(0): 0x5000c5002409b6cd
+
+   SAS Address(1): 0x0
+
+   Connected Port Number: 7(path0)
+
+   Inquiry Data: SEAGATE ST3146356SS 00073QN4DP8P
+
+   FDE Capable: Not Capable
+
+   FDE Enable: Disable
+
+   Secured: Unsecured
+
+   Locked: Unlocked
+
+   Needs EKM Attention: No
+
+   Foreign State: None 
+
+   Device Speed: 3.0Gb/s
+
+   Link Speed: 3.0Gb/s
+
+   Media Type: Hard Disk Device
+
+   Drive: Not Certified
+
+    
+
+   Cause the front LED of the drive to blink to help locate a particular
+   drive:
+
+    # MegaCli -AdpSetProp \{UseDiskActivityforLocate -1\}  -aALL    # might
+   be optional on some drives / enclosures
+
+    # MegaCli -PdLocate -start -physdrv\[E:S\]  -aALL
+
+    Stop the blinking:
+
+    # MegaCli -PdLocate -stop  -physdrv\[E:S\]  -aALL
+
+    
+
+   Output RAID controller events to a file named raid_events.log:
+
+    # MegaCli -AdpEventLog -GetEvents -f raid_events.log -aALL
+
+    
+
+   How to Rebuild a Drive That is Marked as "Foreign" When Inserted: 
+
+   Summary:
+
+    1. # MegaCli -PDMakeGood -PhysDrv\[E:S\]  -aALL
+
+    2. # MegaCli -CfgForeign -Clear -aALL
+
+    3. # MegaCli -PDHSP -Set -PhysDrv \[E:S\] -aALL      # make this
+   unconfigured drive a hot spare
+
+    
+
+   Detail:
+
+   Removing a drive and putting it right back onto the same RAID controller
+   will cause the drive to marked as "Foreign".  A drive in the "Foreign"
+   state is not usable in an array.
+
+    
+
+   0. Find the drive that is not "Online" which should be the newly replaced
+   drive.
+
+   Show the first few lines of output for each drive to help locate the one
+   that is in a "Foreign" state:
+
+     # MegaCli -PDList -aALL | grep --before-context=12 Firmware
+
+   Manually inspect the output for the drive where "Firmware state" is not
+   "Online". Drives that are already removed will not show up in this list.
+
+   Look at the single drive:
+
+    # MegaCli -PdInfo -PhysDrv \[E:S\] -aALL  
+
+   PdInfo should show these important lines:
+
+     ...
+
+     Firmware state: Unconfigured(bad)
+
+     ...
+
+     Foreign State: Foreign
+
+    
+
+   1. Bring the drive online (change state to "Unconfigured(good)":
+
+    # MegaCli -PDMakeGood -PhysDrv\[E:S\]  -aALL
+
+    
+
+   PdInfo should now show:
+
+     ...
+
+     Firmware state: Unconfigured(good)
+
+     ...
+
+     Foreign State: Foreign
+
+    
+
+   2. Clear the "Foreign" state so that the drive can be used:
+
+   2a. Show that a single drive has been inserted with a "foreign"
+   configuration:
+
+     # MegaCli -CfgForeign -Scan -aALL 
+
+     There are 1 foreign configuration(s) on controller 0.
+
+   2b. Clear the foreign config:
+
+    # MegaCli -CfgForeign -Clear -aALL
+
+   PdInfo should now show:
+
+     ...
+
+     Firmware state: Unconfigured(good)
+
+     ...
+
+     Foreign State: None
+
+    
+
+   3. Make the drive a Hot Spare and the controller will begin rebuild
+   automatically:
+
+    # MegaCli -PDHSP -Set -PhysDrv \[E:S\] -aALL
+
+    
+
+   Verify RAID Rebuild in Progress or Change the Rebuild Rate:
+
+   Verify a rebuild in progress by looking at any of the following: 
+
+    1.  Look at physical server / drive activity LEDs.
+
+    2.  Look at drive state:
+
+    # MegaCli -PdInfo -PhysDrv \[E:S\] -aALL
+
+    Drive status should be "Firmware state: Rebuild"
+
+    3. Show rebuild status:
+
+    # MegaCli -pdrbld -showprog -physdrv\[E:S\] -aALL 
+
+    4. Display a continuous text-gui rebuild status:
+
+    # MegaCli -pdrbld -progdsply -physdrv\[E:S\] -aALL
+
+    
+
+   Show the adapter's rebuild properties:
+
+    # MegaCli -AdpAllinfo  -aALL  | grep -i rebuild 
+
+   Change the adapter rebuild rate to 60%:
+
+    # MegaCli -AdpSetProp \{RebuildRate -60\} -aALL
+
+     * * * * * * What's Related
+
+     * More by Dan Stoner
+     * More from Linux, Open Source, and Tech Stuff
+
+  Story Options
+
+     * Printable Story Format
+   LSI MegaRAID - megacli | 0 comments | Create New Account
+   [ ] Newest First
+   [ ] Oldest First
+   [ ] Flat
+   [ ] Nested
+   [ ] No Comments
+   [ ] Threaded [ Refresh ]
+
+   The following comments are owned by whomever posted them. This site is not
+   responsible for what they say.
+
+     ----------------------------------------------------------------------
+
+Search
+
+   _______________________ [ Search ]
+   Advanced Search
+
+Topics
+
+     * Home
+     * Dan Stoner and Family(39)
+     * Fun Stuff @ Work(28)
+     * Linux, Open Source, and Tech Stuff(29)
+     * News(18)
+     * Reading and Writing(10)
+     * Running and Fitness(56)
+     * Silly or Interesting(18)
+
+Connect
+
+   thatlinuxbox.com is the home of Dan Stoner's Personal Blog, Photos, and
+   More (opinions, rants, techno-babble, and possibly a few useful tidbits of
+   knowledge).
+
+   Questions or Comments about this site? Contact danstoner _ at _ gmail.com.
+
+   [IMG] RSS Feed for this blog
+
+   Other places to find me on the web:
+
+   [IMG] Twitter
+
+   [IMG] LinkedIn
+
+   [IMG] dailymile
+
+   Visit Dan Stoner's profile on Pinterest.
+
+User Functions
+
+   Login
+   Username _____________________
+   Password _____________________
+   [ Login ]
+   Don't have an account yet? Sign up as a New User
+   Lost your password?
+
+Support This Site
+
+   If you like something that you find on this site, please consider making a
+   purchase through one of the links below or sending me an item from my
+   Amazon Wish List.
+
+     ----------------------------------------------------------------------
+
+                            Altra Zero Drop Footwear
+                           10% Off and Free Shipping!
+                                     [IMG]
+                           10% Off and Free Shipping!
+                (Discounts will become visible during Checkout)
+
+     ----------------------------------------------------------------------
+
+                                   The Clymb
+
+     ----------------------------------------------------------------------
+
+                       Awesome VPS hosting by Linode.com
+
+                                     [IMG]
+
+                                     IFrame
+                                     IFrame
+
+     ----------------------------------------------------------------------
+
+   Creative Commons License
+   Copyright 2014.
+   This work is licensed under a Creative Commons
+   Attribution-NonCommercial-ShareAlike 2.5 License.
+
+   Powered by Geeklog
+   Created this page in 0.11 seconds

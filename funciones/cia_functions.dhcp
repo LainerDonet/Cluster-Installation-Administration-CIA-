@@ -1,0 +1,94 @@
+#!/bin/bash 
+
+#CHADDR: 00:1b:38:2d:a8:cc:00:00:00:00:00:00:00:00:00:00 OPTION: 53 ( 1) DHCP message type 1 (DHCPDISCOVER) OPTION: 60 ( 32) Vendor class identifier PXEClient:Arch:00000:UNDI:002001
+
+returnDhcpInfo(){
+trap return 1 2 5  
+INSTALL_DEVICE=$1
+
+N_PACK=$2
+[ -z $N_PACK ] && N_PACK=1
+DHCP_DUMP=dhcpdump
+
+DATA=($(tcpdump -lenx -s 1500 -c $N_PACK -i $INSTALL_DEVICE port bootps or port bootpc 2>/dev/null | $DHCP_DUMP 2>/dev/null | grep -e "OPTION:  53" -e "CHADDR:" -e "OPTION:  60"))
+DHCP_MESS=${DATA[10]}
+MAC_IPMI=$(echo ${DATA[1]} | cut -d: -f1-6)
+DHCP_CLIENT=$(echo ${DATA[18]} | cut -d: -f1)
+
+echo $DHCP_MESS $MAC_IPMI $DHCP_CLIENT 
+
+}
+
+
+###############################################################################
+###############################################################################
+
+
+start_dhcp_tftp(){
+INSTALL_DEVICE=$1
+INSTALL_SUBNET=$2
+INSTALL_MAC=$3 
+INSTALL_NAME=$4 
+INSTALL_IP=$5
+
+[ -z $ROOT_DIR ] && ROOT_DIR=$CIA_ROOT
+
+#export ROOT_DIR
+DMASQ_OPT="--no-hosts --no-daemon --no-resolv --no-poll --port=0 --dhcp-leasefile=/dev/null "
+
+killall dnsmasq 2>/dev/null
+echo > /var/lib/dnsmasq/dnsmasq.leases 
+trap "killall dnsmasq 2>/dev/null ; exit 15" 1 2 5
+
+echo "
+##################################
+#ejecutando servidor DHCP + TFTP #
+################################## 
+dnsmasq --tftp-root=$ROOT_DIR/cluster_install/tftpboot 
+	--interface=$INSTALL_DEVICE 
+	--dhcp-range=$INSTALL_SUBNET,static 
+	--dhcp-host=$INSTALL_MAC,$INSTALL_NAME,$INSTALL_IP
+
+
+#################################
+Presionar CTRL+C para terminar 
+este programa. 
+
+Esperar a que se entrege el archivo initrd.img 
+"
+
+dnsmasq  $DMASQ_OPT --log-dhcp  --enable-tftp --dhcp-boot=/pxelinux/pxelinux.bin --tftp-root=$ROOT_DIR/cluster_install/tftpboot --interface=$INSTALL_DEVICE --dhcp-range=$INSTALL_SUBNET,static --dhcp-host=$INSTALL_MAC,$INSTALL_NAME,$INSTALL_IP  
+
+
+#(dnsmasq  $DMASQ_OPT  --enable-tftp --dhcp-boot=/pxelinux/pxelinux.bin --tftp-root=$ROOT_DIR/cluster_install/tftpboot --interface=$INSTALL_DEVICE --dhcp-range=$INSTALL_SUBNET,static --dhcp-host=$INSTALL_MAC,$INSTALL_NAME,$INSTALL_IP  &> /tmp/log.tftp)&>/dev/null&
+
+#while : ; do sleep 1; grep -m 1 initrd.img  /tmp/log.tftp && break; done
+#sleep 30 
+#killall -TERM dnsmasq &>/dev/null
+
+date 
+read 
+
+}
+
+start_dhcp(){
+INSTALL_DEVICE=$1
+INSTALL_SUBNET=$2
+INSTALL_MAC=$3 
+INSTALL_NAME=$4 
+INSTALL_IP=$5
+DMASQ_OPT="--no-hosts --no-daemon --no-resolv --no-poll --port=0 --dhcp-leasefile=/dev/null "
+
+killall dnsmasq 2>/dev/null
+trap "killall dnsmasq 2>/dev/null ;return 1" 1 2 5
+
+#echo "dnsmasq  $DMASQ_OPT  -i $INSTALL_DEVICE --dhcp-range=$INSTALL_SUBNET,static --dhcp-host=$INSTALL_MAC,$INSTALL_NAME,$INSTALL_IP"
+
+ (dnsmasq  $DMASQ_OPT  --interface=$INSTALL_DEVICE --dhcp-range=$INSTALL_SUBNET,static --dhcp-host=$INSTALL_MAC,$INSTALL_NAME,$INSTALL_IP  &> /tmp/log.tftp)&>/dev/null&
+while : ; do sleep 1; grep -m 1 DHCPACK  /tmp/log.tftp && break; done
+killall -TERM dnsmasq &>/dev/null
+
+}
+
+
+

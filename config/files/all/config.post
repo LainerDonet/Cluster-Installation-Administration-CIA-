@@ -1,0 +1,15 @@
+#!/bin/bash 
+
+[ -e /root/.cia-post.config ] && exit 0 
+
+
+for file in /usr/cia-7.0/cluster_install/bin/post.config.*  ; do
+
+bash -x $file &>> /root/.ks-post.log 
+
+done 
+
+touch  /root/.cia-post.config 
+
+reboot 
+

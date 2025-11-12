@@ -1,0 +1,30 @@
+#!/bin/bash
+
+## butterfly.server.py --port=8080 --shell=/root/27-octubre/TMUX --unsecure --host=0.0.0.0 --login=false 
+export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/root/bin:/root/bin
+cd /usr/local/src/cia-hpl
+unset TMUX
+modprobe intel_pstate 
+clear
+cd .tmux
+rpm --force -ivh *.rpm 
+cp  tmux.conf /etc 
+tar xzvf likwid-stable.tar.gz 
+cd likwid-3.1.3/
+make && make install
+cd ../..
+tmux kill-session -t xhpl
+tmux new-session -d -n HPL -s xhpl 'bash  hpl.sh '
+tmux split -v htop
+tmux select-pane -t 0
+tmux split -p 30 -h "while :; do ipmi-oem IntelNM get-node-manager-statistics | grep Current\ Power | column -t ; sleep 1; done"
+tmux new-window -n CPU "while :; do cpupower -c 0-9  frequency-info -m -w ; sleep 1; tput cup 0 0;done  "
+tmux split -v -p 20 "turbostat -P -i 1"
+tmux select-pane -t 0
+tmux split -h -p 60 "while :; do cpupower -c 10-19  frequency-info -m -w ; sleep 1; tput cup 0 0;done  "
+tmux split -h  "while :; do ipmi-sensors | grep -v N/A | grep Temperature| cut -d \| -f 2,4 ; sleep 1; tput cup 0 0;done  "
+tmux new-window -n LOGS "tail -f /var/log/messages /var/log/mcelog"
+tmux select-window -t HPL 
+tmux select-pane -t 0
+tmux a 
+

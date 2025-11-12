@@ -1,0 +1,203 @@
+#!/bin/bash
+
+CIA_ROOT=$(dirname $PWD)
+CIA_MASTER_HOSTNAME=$(hostname)
+CIA_REPO_FILE=/etc/httpd/conf.d/cia-repo.conf
+CIA_KS_FILE=/etc/httpd/conf.d/cia-kickstart.conf
+export CIA_ROOT 
+export CI_ROOT=$CIA_ROOT/cluster_install
+export CA_ROOT=$CIA_ROOT/cluster_admin  
+
+################################################################################
+. $CIA_ROOT/funciones/funciones.cia
+################################################################################
+usage() {
+echoerr "
+-n	Nombre del cluster, utilizado principalmente para Ganglia
+
+-os	directorio de intalacion para arquitectura de 64 bits 
+
+-i	Interface de red a utilizar para la instalación y posterior
+	adminitración de los nodos de cómputo.
+
+-home	Compartir el directorio /home por medio de NFS 
+
+$1"
+exit 1 
+}
+
+display_config(){
+
+echo "CLUSTER_NAME=$CIA_CLUSTER_NAME"
+echo "CIA_INSTALL_DEVICE=$CIA_INSTALL_DEVICE "
+echo "MASTER_IP=$CIA_MASTER_IP"
+echo "CIA_OS_DIR=$CIA_OS_DIR"
+#echo "CIA_ROOT=$CIA_ROOT"
+
+}
+###########################################
+
+write_config(){ 
+
+echo "####################################
+#CIA CONFIG FILE 
+#$(date)
+####################################
+CIA_CLUSTER_NAME=$CIA_CLUSTER_NAME
+CIA_INSTALL_DEVICE=$CIA_INSTALL_DEVICE 
+CIA_MASTER_IP=$CIA_MASTER_IP
+CIA_OS_DIR=$CIA_OS_DIR
+#CIA_ROOT=$CIA_ROOT
+">$CIA_CONFIG_FILE 
+
+echo "creado archivo de configuracion $CONFIG_FILE"
+}
+
+
+################################################################################
+
+################################################################################
+
+
+[ "$(whoami)" != "root" ] && echo "Only root want to do this." && exit 255 
+
+[ -z $1 ] && usage
+
+while :  ; do
+
+case $1 in
+
+-os ) shift
+        export CIA_OS_DIR=$1
+        [ ! -e $CIA_OS_DIR ] && usage "El directorio $CIA_OS_DIR no esta creado"
+	[ ! -e $CIA_OS_DIR/isolinux/vmlinuz ] && usage "El directorio $CIA_OS_DIR no tiene los archivos de instalación"
+	[ ! -e $CIA_OS_DIR/isolinux/initrd.img ] && usage "El directorio $CIA_OS_DIR no tiene los archivos de instalación"
+;;
+
+-i) shift
+	CIA_INSTALL_DEVICE=$1
+	export CIA_INSTALL_DEVICE
+;;
+
+-n) shift
+	export CIA_CLUSTER_NAME=$1
+;;
+
+-home)
+	HOME_DIR=si
+;;
+-*)
+        usage "unknow option $1"
+;;
+
+-h)
+	usage
+;;
+*)
+        break
+;;
+
+esac
+
+shift
+
+done
+
+[ -z $CIA_INSTALL_DEVICE ] && usage "Falta interfase de red a utilizar"
+[ -z $CIA_OS_DIR ] && usage "Falta directorio de instalación"
+CIA_MASTER_IP=$(returnDeviceIP "$CIA_INSTALL_DEVICE")
+[ -z $CIA_MASTER_IP ] &&  usage "Falta dirección IP del nodo"
+CIA_MASTER_NETMASK=$(returnNetmaskIP $CIA_MASTER_IP)
+CIA_MASTER_NETWORK=$(returnNetworkIP $CIA_MASTER_IP)
+HTTP_DIR=http://$CIA_MASTER_IP/cia-repo
+
+export CIA_MASTER_IP CIA_MASTER_NETWORK CIA_MASTER_NETMASK
+
+echo "
+#########################################
+Cluster Installation & Administration
+CIA_ROOT:       $CIA_ROOT
+INSTALL DEVICE: $CIA_INSTALL_DEVICE ($CIA_MASTER_IP)
+CLUSTER NAME:   $CIA_CLUSTER_NAME
+#########################################"
+
+cia_setup_ipmi_alias 
+ifup eth0:1 
+cia_setup_hosts 
+setupRepoHttp $CIA_OS_DIR $CIA_MASTER_NETWORK $CIA_MASTER_NETMASK > $CIA_REPO_FILE
+setupKickstartHttpd $CI_ROOT $CIA_MASTER_NETWORK $CIA_MASTER_NETMASK > $CIA_KS_FILE
+
+setupTftp $CI_ROOT         
+setupSyslinux $CI_ROOT  
+
+cia_setup_nfs $CIA_ROOT
+cia_setup_nfs /opt
+
+[ ! -z $HOME_DIR ] && cia_setup_nfs /home
+
+cia_setup_rsh
+cia_setup_rlogin
+cia_update_hosts_equiv master 
+cia_update_rhosts master
+
+echo "
+#########################################
+Iniciando los servicios 
+http, nfs, xinetd
+#########################################"
+
+service httpd restart 
+chkconfig httpd on
+service nfs restart
+chkconfig nfs on 
+service xinetd restart
+chkconfig xinetd on
+[ ! -e  /etc/hosts.cia ] && echo "#$(date)"> /etc/hosts.cia
+[ ! -e  $CIA_MAC_FILE ] && echo "#$(date)"> $CIA_MAC_FILE 
+
+echo "
+#####################################################################
+Probando la conexión al medio http proporcionado: $HTTP_DIR 
+#####################################################################"     
+wget -q $HTTP_DIR/isolinux/isolinux.cfg -O /tmp/isolinux.cfg            
+if [ $? -ne 0 ] ; then 
+ 	echo "***** no es posible obtener la intalción por medio proporcioando"
+	exit 
+else
+	echo "...OK"                             
+fi
+rm /tmp/isolinux.cfg                                                    
+mkdir -p $CI_ROOT/tftpboot/pxelinux/boot/x86_64
+wget -q $HTTP_DIR/isolinux/vmlinuz -O $CI_ROOT/tftpboot/pxelinux/boot/x86_64/vmlinuz      
+wget -q $HTTP_DIR/isolinux/initrd.img -O $CI_ROOT/tftpboot/pxelinux/boot/x86_64/initrd.img
+
+write_config
+
+if ! grep -q kernel.randomize_va_space /etc/sysctl.conf ; then
+bash $CIA_ROOT/config/files/all/config.node
+fi
+sysctl -p &>/dev/null
+
+if [ ! -d $CIA_ROOT/nodes/common ] ; then
+        mkdir -p $CIA_ROOT/nodes/common 
+fi
+
+if [ ! -d $CIA_ROOT/groups ] ;then 
+        mkdir $CIA_ROOT/groups 
+fi
+
+cluster_update -q 
+
+
+[ ! -e $CIA_ROOT/config/nodes.nproc ] && echo "#$(date)" > $CIA_ROOT/config/nodes.nproc 
+if  ! grep -w -q $HOSTNAME $CIA_ROOT/config/nodes.nproc  ; then 
+      echo "#$HOSTNAME np=$(nproc --all)" >> $CIA_ROOT/config/nodes.nproc
+fi
+
+export CIA_CLUSTER_NAME CIA_INSTALL_DEVICE CIA_MASTER_IP CIA_OS_DIR
+
+for install in $CIA_ROOT/bin/install.* 
+do bash $install 
+done 
+
+

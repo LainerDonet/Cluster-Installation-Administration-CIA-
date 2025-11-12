@@ -1,0 +1,152 @@
+#!/bin/bash 
+
+
+NPAR=10
+COMMON_FILES=$CIA_ROOT/config/common.conf
+. $CIA_ROOT/funciones/funciones.cia
+
+
+usage(){
+echo "
+La herramienta cluster_update copia los archivos indicados anteriormente por el comando cluster_export.
+
+La copia de estos archivos se realiza por medio de la herramienta rsync en el siguiente orden:
+
+1. Archivos comunes a todos los nodos: $CIA_ROOT/nodes/common
+2. Archivos comunes a un grupo de nodos: $CIA_ROOT/group/*
+3. Archivos individuales a cada nodo: $CIA_ROOT/nodes/* 
+
+Al termino de cada copia se reportan la cantidad de archivos copiados y el total de datos tranferidos. 
+
+Por default cluster_update ejecuta el comando cluster_ping para obtener la lista de nodos funcionales.
+
+
+$1"
+
+exit 1
+}
+
+######################################################################
+
+######################################################################
+copy_files () {
+
+FILES="/etc/hosts
+/etc/group
+/etc/passwd
+/etc/shadow
+/etc/securetty
+/etc/hosts.equiv
+/etc/services
+/etc/resolv.conf
+/etc/munge/munge.key
+/etc/torque 
+
+/root/.rhosts
+/root/.ssh
+/root/.bashrc
+/root/.mpd.conf" 
+
+ 
+echo "Sync common files ..."
+cluster_export -a  $FILES 
+
+}
+
+rsync_nodes(){
+BASE_DIR=$1
+RANGE=$2
+
+if [ -z $Z_COMM ] ; then
+$TIME_COMM cluster_exec -n $RANGE -b -p 20 "rsync -e ssh --stats  -az root@master:$CIA_ROOT/$BASE_DIR/ / | grep transferred" 
+
+else
+echo "cluster_exec -n $RANGE -b -p 20 \"rsync -e ssh --stats  -az root@master:$CIA_ROOT/$BASE_DIR/ / | grep transferred\" "
+
+fi
+
+
+}
+
+######################################################################
+
+while :  ; do
+
+case $1 in
+-debug)
+        set -x
+;;
+
+-q)	
+#opciones para eliminar cabezeras  y avance de copia
+	copy_files
+	exit 0
+;;
+
+
+-h) 	
+	usage
+	;;
+-a)
+	ALL=si
+	;;
+
+-t)
+	TIME_COMM=time
+	;;
+-z)
+	Z_COMM=si
+	;;
+-*)
+        usage "unknow option $1"
+
+;;
+*)
+        break
+;;
+
+esac
+
+shift
+
+done
+
+##common files 
+##
+copy_files
+echo "
+Checking nodes (ALL)..."
+NODE_RANGE=$(cluster_ping -l --up -g ALL )
+echo "###########################################################
+#Updating $(nodeset -c $NODE_RANGE) node(s) common files: 
+###########################################################"
+rsync_nodes nodes/common $NODE_RANGE
+
+##group files
+##
+cd $CIA_ROOT/groups/
+for GROUP in $(ls) ; do
+echo "
+Checking nodes ($GROUP)..."
+NODE_RANGE=$(cluster_ping -l --up -g $GROUP)
+[ -z $NODE_RANGE ] && continue 
+echo "###########################################################
+#Updating $(nodeset -c $NODE_RANGE) node(s) group $GROUP files: 
+###########################################################"
+rsync_nodes groups/$GROUP $NODE_RANGE
+done
+
+##nodes files
+##
+cd $CIA_ROOT/nodes/
+for NODE in $(ls) ; do
+[ $NODE == "common" ] && continue
+echo "
+###########################################################
+#Updating node $NODE files:
+###########################################################"
+rsync_nodes nodes/$NODE $NODE
+done
+
+exit 0
+

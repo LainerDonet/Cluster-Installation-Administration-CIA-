@@ -1,0 +1,193 @@
+#####################################################
+##############            ###########################
+#####################################################
+
+cat<<'EOFRC-'> /root/.bashrc
+# .bashrc                                         
+                                                  
+# User specific aliases and functions             
+                                                  
+# Source global definitions                       
+if [ -f /etc/bashrc ]; then                       
+        . /etc/bashrc                             
+fi                                                
+
+#azul
+#PS1="------------\n\033[1;37;44m{`hostname`}:\033[36m \w\033[0;0m \n\[\033[30;47m\][\[\033[31m\]\u\[\033[30;47m\]@:\W]$\[\033[00m\](\#)->" 
+
+#verde
+PS1="------------\n\033[1;37;42m{`hostname`}:\033[36m \w\033[0;0m \n\[\033[30;47m\][\[\033[31m\]\u\[\033[30;47m\]@:\W]$\[\033[00m\](\#)->" 
+
+alias tailm='tail /var/log/messages'
+alias tailmf='tailf /var/log/messages'
+alias dmesg10='dmesg | tail -n 10' 
+alias dmesg20='dmesg | tail -n 20' 
+
+function ff() { find . -name '*'$1'*' ; }                 # find a file
+function fe() { find . -name '*'$1'*' -exec $2 {} \; ; }  # find a file and run $2 on it 
+
+function meml(){
+echo sqrt\( \($(free -b | awk '/Mem/{print $2}') \* 0.50 \)/8 \) | bc 
+}
+
+# Store 5000 commands in history buffer
+export HISTSIZE=5000
+ 
+# Store 5000 commands in history FILE 
+export HISTFILESIZE=5000      
+ 
+# Avoid duplicates in hisotry 
+export HISTIGNORE='&:[ ]*'
+
+EOFRC-
+#####################################################
+##############            ###########################
+#####################################################
+
+echo "
+
+Host *
+        GSSAPIAuthentication no
+	CheckHostIP	no
+	StrictHostKeyChecking	no
+	UsePrivilegedPort	no
+        ForwardX11Trusted yes
+        SendEnv LANG LC_CTYPE LC_NUMERIC LC_TIME LC_COLLATE LC_MONETARY LC_MESSAGES 
+        SendEnv LC_PAPER LC_NAME LC_ADDRESS LC_TELEPHONE LC_MEASUREMENT 
+        SendEnv LC_IDENTIFICATION LC_ALL
+
+" > /etc/ssh/ssh_config
+#####################################################
+##############            ###########################
+#####################################################
+
+echo "
+Port 22
+Protocol 2
+MaxAuthTries 3
+#MaxStartups 50
+#PermitRootLogin without-password
+LoginGraceTime 30
+SyslogFacility AUTHPRIV
+PasswordAuthentication yes
+ChallengeResponseAuthentication no
+GSSAPIAuthentication no
+GSSAPICleanupCredentials no
+UsePAM yes
+AcceptEnv LANG LC_CTYPE LC_NUMERIC LC_TIME LC_COLLATE LC_MONETARY LC_MESSAGES
+AcceptEnv LC_PAPER LC_NAME LC_ADDRESS LC_TELEPHONE LC_MEASUREMENT
+AcceptEnv LC_IDENTIFICATION LC_ALL LANGUAGE
+AcceptEnv XMODIFIERS
+X11Forwarding yes
+UseDNS no
+Subsystem	sftp	/usr/libexec/openssh/sftp-server
+
+" >/etc/ssh/sshd_config
+#####################################################
+##############            ###########################
+#####################################################
+
+[ ! -f /etc/profile.d/ssh-key.sh ] && cat<<'EOF-'> /etc/profile.d/ssh-key.sh
+
+if [[ $INTERACTIVE != "false" ]] && [ ! -f $HOME/.ssh/id_dsa.pub ]
+then
+        ssh-keygen -q -t dsa -f $HOME/.ssh/id_dsa  -C '' -N ''  
+
+        cat $HOME/.ssh/id_dsa.pub >> $HOME/.ssh/authorized_keys
+
+        chmod 600 $HOME/.ssh/authorized_keys
+        chmod g-w $HOME
+fi
+
+EOF-
+
+[ ! -f /etc/profile.d/ssh-key.csh ] && cat<<'EOF-'> /etc/profile.d/ssh-key.csh
+bash /etc/profile.d/ssh-key.sh
+
+EOF-
+chmod 755  /etc/profile.d/ssh-key.sh /etc/profile.d/ssh-key.csh
+
+[ ! -f /etc/profile.d/mpdconf.sh ] && cat<<'EOF-'> /etc/profile.d/mpdconf.sh
+
+
+if [[ $INTERACTIVE != "false" ]] && [ ! -f $HOME/.mpd.conf ]
+then
+        echo "secretword=$USER-$RANDOM" >  $HOME/.mpd.conf  
+
+        chmod 600 $HOME/.mpd.conf
+fi
+
+EOF-
+
+[ ! -f /etc/profile.d/mpdconf.csh ] && cat<<'EOF-'> /etc/profile.d/mpdconf.csh
+bash /etc/profile.d/mpdconf.sh
+
+EOF-
+chmod 755 /etc/profile.d/mpdconf.sh /etc/profile.d/mpdconf.csh  
+
+
+echo "LANG=en_US.UTF-8
+SYSFONT=Lat2-Terminus16.psfu.gz
+" > /etc/sysconfig/i18n
+
+echo "soporte ALL=(ALL)       ALL" >> /etc/sudoers 
+echo "
+*                soft    memlock         64000000 
+*                hard    memlock         64000000 
+" >/etc/security/limits.d/memlock.conf
+echo "
+*                soft    stack         unlimited 
+*                hard    stack         unlimited
+" >/etc/security/limits.d/stack.conf
+#####################################################
+##############            ###########################
+#####################################################
+
+if ! grep -q kernel.randomize_va_space /etc/sysctl.conf ; then
+echo "
+net.ipv4.ip_forward = 1
+kernel.randomize_va_space = 0                     
+net.ipv4.tcp_max_syn_backlog=1024
+net.ipv4.tcp_window_scaling=1
+net.ipv4.tcp_timestamps=0                         
+net.ipv4.tcp_sack=0                               
+net.core.netdev_max_backlog=250000                
+net.core.rmem_max=104857600                        
+net.core.wmem_max=104857600                       
+net.core.rmem_default=104857600                    
+net.core.wmem_default=104857600                   
+net.core.optmem_max=104857600                   
+net.ipv4.tcp_mem=104857600 104857600 104857600        
+net.ipv4.tcp_rmem=4096 87380 104857600             
+net.ipv4.tcp_wmem=4096 65536 104857600            
+net.ipv4.tcp_low_latency=1                        
+
+">>/etc/sysctl.conf 
+fi 
+
+#sysctl vm.panic_on_oom=1
+#sysctl kernel.panic=X
+#echo "vm.panic_on_oom=1" >> /etc/sysctl.conf
+#echo "kernel.panic=X" >> /etc/sysctl.conf
+
+
+echo "options lnet networks=\"o2ib0\" " > /etc/modprobe.d/lnet.conf
+echo "options ib_mthca log_num_mtt=24" > /etc/modprobe.d/ib.conf 
+echo "options ib_ipoib send_queue_size=128 recv_queue_size=128 " >> /etc/modprobe.d/ib.conf
+echo "options mlx4_core log_num_mtt=24" >> /etc/modprobe.d/ib.conf
+
+[ -e /etc/rdma/dat.conf ] && echo '
+ofa-v2-ib0 u2.0 nonthreadsafe default libdaplofa.so.2 dapl.2.0 "ib0 0" ""
+ofa-v2-ib1 u2.0 nonthreadsafe default libdaplofa.so.2 dapl.2.0 "ib1 0" ""
+ofa-v2-mlx4_0-1 u2.0 nonthreadsafe default libdaploscm.so.2 dapl.2.0 "mlx4_0 1" ""
+ofa-v2-mlx4_0-2 u2.0 nonthreadsafe default libdaploscm.so.2 dapl.2.0 "mlx4_0 2" ""
+ofa-v2-mthca0-1 u2.0 nonthreadsafe default libdaploscm.so.2 dapl.2.0 "mthca0 1" ""
+ofa-v2-mthca0-2 u2.0 nonthreadsafe default libdaploscm.so.2 dapl.2.0 "mthca0 2" ""
+ofa-v2-ipath0-1 u2.0 nonthreadsafe default libdaploscm.so.2 dapl.2.0 "ipath0 1" ""
+ofa-v2-ipath0-2 u2.0 nonthreadsafe default libdaploscm.so.2 dapl.2.0 "ipath0 2" ""
+' > /etc/dat.conf 
+
+[ -e /etc/rdma/ ] && cp -f /etc/dat.conf /etc/rdma/
+[ -e /etc/infiniband/ ] && cp -f /etc/dat.conf /etc/infiniband/
+
+

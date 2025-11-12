@@ -1,0 +1,9 @@
+#!/bin/bash 
+
+#/etc/init.d/lnet-client stop 
+
+echo "umounting lustre ..."
+umount /LUSTRE/home 
+umount /LUSTRE/data
+
+

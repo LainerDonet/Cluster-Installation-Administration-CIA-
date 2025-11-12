@@ -1,0 +1,26 @@
+#!/bin/bash -x 
+trap exit 1 2 5  
+
+[ -z $CIA_ROOT ] && exit
+
+. $CIA_ROOT/funciones/funciones.cia
+
+
+NODE_NAME=$1
+NODE_IP=$2
+NODE_MAC=$3
+SOL=$4
+GUI_INSTALL=$5
+
+[ -z $NODE_IP ] && NODE_IP=$(cia_return_ip $NODE_NAME) 
+[ -z $NODE_MAC ] && NODE_MAC=$(cia_return_mac $NODE_NAME)
+
+NETWORK_ADMIN=$(returnNetworkIP $NODE_IP)     
+echo "#" > /var/log/httpd/access_log
+echo "+++ Esperando por nodo $NODE_NAME ($NODE_MAC) -- $GUI_INSTALL"  
+start_dhcp_tftp $CIA_INSTALL_DEVICE $NETWORK_ADMIN $NODE_MAC $NODE_NAME $NODE_IP 
+IPMI_IP=$(returnIpmiIP $NODE_IP)
+[ "$GUI_INSTALL" != "sol" ] && logHttpStatusInstall || setIpmiSol $IPMI_IP
+ 
+echo "+++"
+

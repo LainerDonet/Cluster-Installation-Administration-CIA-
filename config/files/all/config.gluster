@@ -1,0 +1,22 @@
+#!/bin/bash 
+
+rpm -Uvh /cia/cia_utils/RPMS/$(uname -i)/gluster/*.rpm
+
+rmdir /home
+mkdir /storage 
+mkdir /GLUSTER
+mkdir /GLUSTER/scratch
+mkdir /GLUSTER/software
+mkdir /GLUSTER/home
+ln -s /GLUSTER/scratch /storage/scratch
+ln -s /GLUSTER/software /storage/software
+ln -s /GLUSTER/home /home
+
+
+
+echo "
+172.19.253.252:/scratch		/GLUSTER/scratch	glusterfs 	_netdev,transport=tcp 0 0
+172.19.253.252:/software	/GLUSTER/software	glusterfs 	_netdev,transport=tcp 0 0
+172.19.253.252:/home		/GLUSTER/home		glusterfs 	_netdev,transport=tcp 0 0
+" >> /etc/fstab 
+

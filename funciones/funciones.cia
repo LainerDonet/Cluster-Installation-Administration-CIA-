@@ -1,0 +1,28 @@
+#!/bin/bash 
+
+CIA_CONFIG_FILE="$CIA_ROOT/config/cia.conf"
+CIA_MAC_FILE="$CIA_ROOT/config/MAC.conf"
+#CIA_HOSTS_INSTALL="$CIA_ROOT/config/hosts.install"
+CIA_HOSTS_INSTALL="/etc/hosts"
+CIA_DHCP_CONF=/etc/dhcp/dhcpd.conf 
+echoerr() { echo "$@" >&2; }
+modif_file(){ cp $1 $1.$(date +%s); }
+centos_version() { [ "$(uname -r | cut -c 1)" == "3" ] && echo 7 || echo 6 ; }
+
+FUNC_VER=$(centos_version)
+
+[ -z $CIA_ROOT ] && echoerr "Valor CIA_ROOT sin definir" && return
+
+export CIA_CONFIG_FILE CIA_MAC_FILE CIA_HOSTS_INSTALL CIA_DHCP_CONF FUNC_VER
+
+. $CIA_ROOT/funciones/cia_functions.dhcp
+. $CIA_ROOT/funciones/cia_functions.ip
+. $CIA_ROOT/funciones/cia_functions.ipmi
+. $CIA_ROOT/funciones/cia_functions.ks
+. $CIA_ROOT/funciones/cia_functions.repo
+. $CIA_ROOT/funciones/cia_functions.tftp
+. $CIA_ROOT/funciones/cia_functions.nodes
+
+[ -e $CIA_CONFIG_FILE ] && . $CIA_CONFIG_FILE
+
+

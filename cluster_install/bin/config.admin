@@ -1,0 +1,12 @@
+#!/bin/bash 
+
+rpm -e hwloc
+
+#cp config.rsyslog
+
+rpm -Uvh  /cia/cia_utils/RPMS/x86_64/admin/update/*.rpm 
+
+rpm -ivh /cia/cia_utils/RPMS/x86_64/admin/*.rpm
+
+rpm -ivh /usr/cia-7.3/cia_utils/RPMS/x86_64/devel/*.rpm
+

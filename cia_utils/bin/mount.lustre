@@ -1,0 +1,11 @@
+/bin/mount -t lustre -o localflock,_netdev 10.10.200.204@o2ib0,10.10.200.205@o2ib1:/fsyoltla /LUSTRE
+
+/sbin/sysctl -w lnet.debug=0
+/usr/sbin/lctl set_param osc.*.max_dirty_mb=256
+/usr/sbin/lctl set_param osc.*.max_rpcs_in_flight=32
+# /usr/sbin/lctl conf_param fsyoltla.sys.jobid_var=SLURM_JOB_ID
+
+if [ $(/bin/mount -t lustre | wc -l) -eq 1 ] ; then
+        echo "Lustre mount OK"
+fi
+

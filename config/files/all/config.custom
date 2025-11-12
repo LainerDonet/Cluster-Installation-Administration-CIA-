@@ -1,0 +1,12 @@
+#!/bin/bash 
+
+chmod 1777 /scratch 
+cp -v /cia/config/files/all/cpuspeed /etc/sysconfig 
+chkconfig --add cpuspeed 
+chkconfig cpuspeed on
+chkconfig --del shellinaboxd
+chkconfig cuda off 
+
+rpm -Uvh /cia/cia_utils/RPMS/x86_64/update/*.rpm 
+
+

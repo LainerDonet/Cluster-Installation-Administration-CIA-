@@ -1,0 +1,372 @@
+#!/bin/bash 
+
+cia_setup_hosts(){
+NODE_IP=$1
+NODE_NAME=$2
+#modif_file /etc/hosts
+
+if [ -z $NODE_IP ] ; then
+modif_file /etc/hosts
+echo -e "127.0.0.1\tlocalhost\tlocalhost.localdomain" > /etc/hosts   
+echo -e "$CIA_MASTER_IP\t $HOSTNAME master nfsmaster pbsmaster" >> /etc/hosts
+
+else
+BASE_ALIAS=$(echo $NODE_NAME | tr [a-z] " " | tr -s " " $(echo $NODE_NAME | cut -c1) )
+if ! grep -w -q $NODE_NAME /etc/hosts ;then
+	modif_file /etc/hosts
+        echo -e "$NODE_IP\t$NODE_NAME\t$BASE_ALIAS" >> /etc/hosts
+	cia_update_hosts_cia $NODE_IP $NODE_NAME $BASE_ALIAS
+fi	
+fi
+
+}
+
+cia_check_node_name(){
+NODE_NAME=$1
+NODE_NAME_TMP=($(grep ^$NODE_NAME $CIA_MAC_FILE))
+NODE_NAME_TMP=${NODE_NAME_TMP[0]}
+[ -z $NODE_NAME_TMP ] && return 1 || return 0
+}
+
+cia_check_node_ip(){
+NODE_NAME=$1
+T_NODE_IP=($(grep ^$NODE_NAME $CIA_MAC_FILE))
+T_NODE_IP=${T_NODE_IP[1]}
+[ -z $T_NODE_IP ] && return 1 || return 0
+
+}
+
+cia_check_node_mac(){
+T_NODE_NAME=$1
+[ ! -z $2 ] && return 0
+T_NODE_MAC=($(grep $T_NODE_NAME $CIA_MAC_FILE))
+T_NODE_MAC=${T_NODE_MAC[2]}
+[ -z $T_NODE_MAC ] && return 0 || return 1
+}
+
+cia_add_node(){
+NODE_NAME=$1
+NODE_IP=$2
+NODE_MAC=$3
+
+echo "$NODE_NAME $NODE_IP $NODE_MAC" >> $CIA_MAC_FILE
+
+echo "nodo $NODE_NAME ($NODE_IP : $NODE_MAC ) definido."
+
+}
+
+cia_return_last_ip(){
+
+TMP_IP=$(grep -v '^#' $CIA_MAC_FILE | grep '.' | tail -n1 | cut -d' ' -f2)
+
+if [ -z $TMP_IP ] ; then 
+	PREFIX=$(returnPrefixIP $CIA_MASTER_IP)
+	if [ $PREFIX -eq 16 ] ; then
+		echo $CIA_MASTER_IP |  awk -F. '{print $1"."$2"."1"."0}'
+	else
+		echo $CIA_MASTER_IP |  awk -F. '{print $1"."$2"."$3"."0}'
+
+	fi
+else
+	echo $TMP_IP
+fi
+}
+
+cia_return_ip_plus_one(){
+LAST_IP=$(cia_return_last_ip)
+PREFIX=$(returnPrefixIP $LAST_IP)
+LAST_VALUE=$(echo $LAST_IP | awk -F. '{print $4}' )
+
+[ $LAST_VALUE -lt 252 ] && 	echo $LAST_IP | awk -F. '{print $1"."$2"."$3"."$4+1}' && return
+
+if [ $PREFIX -eq 16 ] ; then
+
+echo $LAST_IP | awk -F. '{print $1"."$2"."$3+1"."1}'
+
+else
+
+echoerr "ERROR !!! MAX IP ALLOWED.  CRTL+C to continue ... "
+sleep 10h && exit 
+
+fi
+
+
+}
+cia_return_ip(){
+	NODE_NAME=$1
+	[ ! -e /etc/hosts.cia  ] && touch /etc/hosts.cia
+
+	NODE_IP=($(grep -w $NODE_NAME /etc/hosts.cia ))
+	echo ${NODE_IP[0]}
+}
+
+cia_return_ipmi_ip(){
+        NODE_NAME=$1
+        [ ! -e /etc/hosts.ipmi  ] && touch /etc/hosts.ipmi
+
+        NODE_IP=($(grep -w $NODE_NAME /etc/hosts.ipmi ))
+        echo ${NODE_IP[0]}
+}
+
+cia_return_mac(){
+	NODE_NAME=$1
+	[ ! -e $CIA_MAC_FILE  ] && touch $CIA_MAC_FILE
+	NODE_MAC=($(grep -w $NODE_NAME $CIA_MAC_FILE))
+	echo ${NODE_MAC[2]}  
+}
+
+cia_return_name(){
+	NODE_MAC=$1
+        [ ! -e $CIA_MAC_FILE  ] && touch $CIA_MAC_FILE
+
+	NODE_MAC=($(grep -w $NODE_MAC $CIA_MAC_FILE))
+	echo ${NODE_MAC[0]}
+}
+cia_return_ipmi_name(){
+        NODE_NAME=$1
+        [ ! -e /etc/hosts.ipmi  ] && touch /etc/hosts.ipmi
+
+        NODE_NAME=($(grep -m1 -w $NODE_NAME /etc/hosts.ipmi))
+        echo ${NODE_NAME[1]}
+}
+
+
+cia_return_full_name(){
+	NODE_NAME=$1
+	[ ! -e /etc/hosts.cia  ] && touch /etc/hosts.cia
+	FNODE_NAME=($(grep -w $NODE_NAME /etc/hosts.cia ))
+	echo ${FNODE_NAME[1]}
+}
+
+cia_update_hosts_ipmi(){
+NODE_IP=$1
+NODE_NAME=$2
+NODE_IPMI_IP=$3
+
+[ -z $NODE_IPMI_IP ] && NODE_IPMI_IP=$(returnIpmiIP $NODE_IP)
+
+BASE_ALIAS=$(echo $NODE_NAME | tr [a-z] " " | tr -s " " $(echo $NODE_NAME | cut -c1) )
+[ ! -e /etc/hosts.ipmi  ] && touch /etc/hosts.ipmi
+if ! grep -w -q ipmi-$NODE_NAME /etc/hosts.ipmi ;then
+#        echo -e "$(returnIpmiIP $NODE_IP)\tipmi-$NODE_NAME\ti$NODE_NAME\ti$BASE_ALIAS" >> /etc/hosts.ipmi
+        echo -e "$NODE_IPMI_IP\tipmi-$NODE_NAME\ti$NODE_NAME\ti$BASE_ALIAS" >> /etc/hosts.ipmi
+fi
+
+}
+
+cia_update_hosts_ib(){
+NODE_IP=$1
+NODE_NAME=$2
+
+BASE_ALIAS=$(echo $NODE_NAME | tr [a-z] " " | tr -s " " $(echo $NODE_NAME | cut -c1) )
+[ ! -e /etc/hosts.ib  ] && touch /etc/hosts.ib
+
+if ! grep -w -q ib-$NODE_NAME /etc/hosts.ib ;then
+        echo -e "$(returnIbIP $NODE_IP)\tib-$NODE_NAME\tib$NODE_NAME\tib$BASE_ALIAS" >> /etc/hosts.ib
+fi
+
+}
+
+cia_update_hosts_cia(){
+NODE_IP=$1
+NODE_NAME=$2
+BASE_ALIAS=$3
+[ ! -e /etc/hosts.cia  ] && touch /etc/hosts.cia
+
+if ! grep -w -q $NODE_NAME /etc/hosts.cia ;then
+        echo -e "$NODE_IP\t$NODE_NAME\t$BASE_ALIAS" >> /etc/hosts.cia
+fi
+
+}
+
+
+
+cia_update_hosts_equiv(){
+NODE_NAME=$1
+
+[ ! -e /etc/hosts.equiv  ] && touch /etc/hosts.equiv
+if ! grep -w -q $NODE_NAME /etc/hosts.equiv ;then
+	echo "$NODE_NAME" >> /etc/hosts.equiv 
+fi
+
+}
+
+cia_update_hosts_cluster(){
+NODE_NAME=$1
+[ ! -e /etc/hosts.cluster  ] && touch /etc/hosts.cluster
+
+if ! grep -w -q $NODE_NAME /etc/hosts.cluster ;then
+	echo "$NODE_NAME" >> /etc/hosts.cluster 
+fi
+
+}
+
+cia_update_rhosts(){
+NODE_NAME=$1
+[ ! -e /root/.rhosts  ] && touch /root/.rhosts
+
+if ! grep -w -q $NODE_NAME /root/.rhosts ;then
+	echo "$NODE_NAME" >> /root/.rhosts 
+fi
+
+}
+
+cia_update_node_cia(){
+NODE_NAME=$1
+[ ! -e $CIA_ROOT/config/node_groups/ALL ] && touch $CIA_ROOT/config/node_groups/ALL
+
+if ! grep -w -q $NODE_NAME  $CIA_ROOT/config/node_groups/ALL ; then
+	 echo "$NODE_NAME" >> $CIA_ROOT/config/node_groups/ALL 
+
+fi
+
+}
+
+cia_setup_rsh(){
+	if ! grep -w -q rsh /etc/securetty ; then
+		echo "rsh" >> /etc/securetty
+	fi
+	chkconfig rsh on
+	chkconfig xinetd on
+}
+
+cia_setup_rlogin(){
+	if ! grep -w -q rlogin /etc/securetty ; then
+		echo "rlogin" >> /etc/securetty
+	fi
+	chkconfig rlogin on
+        chkconfig xinetd on
+}
+
+cia_setup_nfs(){
+NFS_DIR=$1
+if ! grep -w -q $NFS_DIR /etc/exports  ; then  
+modif_file /etc/exports
+echo "#$(date)" >> /etc/exports
+echo -e "$NFS_DIR\t$CIA_MASTER_NETWORK/$CIA_MASTER_NETMASK(rw,sync,wdelay,no_root_squash)" >> /etc/exports
+chkconfig rpcbind on
+chkconfig nfs on
+
+fi
+}
+
+cia_getmac(){
+NODE_NAME=$1
+echoerr "** Direccion MAC para el nodo $NODE_NAME: "
+read MAC_tmp
+returnValidMac MAC_tmp
+
+}
+
+cia_getmac_ipmi(){
+NODE_NAME=$1
+NODE_IPMI=$2
+
+#echoerr "** Probe IPMI ADDR ($NODE_IPMI) for node $NODE_NAME ..."
+#ping -c 3 -t 2 $NODE_IPMI > /dev/null
+
+#checkIpmi $NODE_IPMI $NODE_NAME 
+if [ $? -eq 0 ] ; then
+        MACADDR=$(returnAdminMac $NODE_IPMI)
+        if [ ! -z $MACADDR ] ;then
+                returnValidMac $MACADDR
+                if [ $? -eq 0 ] ; then
+                        GETMAC=0
+#                        setIpmiUid15 $NODE_IPMI >&2
+#                        setIpmiBootPxe $NODE_IPMI >&2
+                else
+                        MACADDR=""
+                fi
+        fi
+else
+echoerr "Error en comunicacion con IPMI. "
+fi
+
+echo $MACADDR
+
+}
+
+cia_getmac_no_ipmi(){
+NODE_NAME=$1
+SETUP=$2
+while [ -z $GETMAC  ] ;do
+
+echoerr "
+** Waiting for $NODE_NAME MAC on $CIA_INSTALL_DEVICE "
+        if [ -z $MACADDR ] ; then
+                DATA=($(returnDhcpInfo $CIA_INSTALL_DEVICE 2>/dev/null  ))
+                DHCP_MESS=${DATA[0]}
+                MAC_TMP=${DATA[1]}
+                DHCP_CLIENT=${DATA[2]}
+                if [ "$DHCP_CLIENT" == "PXEClient" ] ; then
+                        echoerr "$NODE_NAME ${DATA[*]}"
+                        MACADDR=$MAC_TMP
+                else
+                        echoerr "++++++Ignoring $DHCP_MESS with Vendor $DHCP_CLIENT -> $MAC_TMP"
+                        continue
+                fi
+        fi
+        if [ ! -z $MACADDR ] ;then
+                cia_check_node_mac $MACADDR $SETUP
+                if [ $? -eq 0 ] ; then
+                GETMAC=0
+                else
+                        MACADDR=""
+			echoerr "++++++Duplicated MAC $MACADDR."
+                        continue
+                fi
+        fi
+done
+
+echo $MACADDR
+
+}
+
+cia_setup_ipmi_alias(){
+
+echo "
+DEVICE=eth0:1
+BOOTPROTO=static
+IPADDR=172.16.253.254
+IPV6INIT=no
+MTU=1500
+NETMASK=255.255.0.0
+NM_CONTROLLED=no
+ONBOOT=yes
+TYPE=Ethernet
+" > /etc/sysconfig/network-scripts/ifcfg-eth0:1
+
+}
+
+cia_del_ip(){
+NODE_IP=$1
+NODE_NAME=$2
+IPMI_IP=$(returnIpmiIP $NODE_IP) 
+IB_IP=$(returnIbIP $NODE_IP)
+
+sed -i "/$NODE_IP/d" /etc/hosts 
+sed -i "/$NODE_IP/d" /etc/hosts.cia
+sed -i "/$IPMI_IP/d" /etc/hosts.ipmi
+sed -i "/$IB_IP/d" /etc/hosts.ib
+sed -i "/$NODE_NAME/d" /etc/hosts.cluster 
+
+}
+
+cia_del_mac(){
+NODE_MAC=$1
+
+sed -i "/$NODE_MAC/d" $CIA_MAC_FILE
+}
+
+cia_del_groups(){
+NODE_NAME=$1
+
+for  file in $CIA_ROOT/config/node_groups/* ; do 
+sed -i "/$NODE_NAME/d" $file 
+done 
+}
+
+
+
+
+

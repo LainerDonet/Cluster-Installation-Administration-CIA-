@@ -1,0 +1,22 @@
+#!/bin/bash 
+
+[ -z $CIA_ROOT ] && exit 
+
+V_OPT=-v
+
+#cd /
+cp -dRf $V_OPT $CIA_ROOT/nodes/common/* /
+
+for group in $(ls $CIA_ROOT/groups) ; do 
+
+if grep -q -w  $HOSTNAME $CIA_ROOT/config/node_groups/$group ; then
+
+ cp -dRf $V_OPT $CIA_ROOT/groups/$group/* /  
+
+fi 
+
+done 
+
+[[ -e $CIA_ROOT/nodes/$HOSTNAME/ ]] && cp -dRf $V_OPT $CIA_ROOT/nodes/$HOSTNAME/* /
+
+

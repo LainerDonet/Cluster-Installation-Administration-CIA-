@@ -1,0 +1,22 @@
+#!/bin/bash 
+
+#######################33333
+SOURCE=/etc/sysconfig/network-scripts/ifcfg-eth0
+TARGET=/etc/sysconfig/network-scripts/ifcfg-eth1
+
+source $SOURCE
+
+IB_IP=$(echo $IPADDR | awk -F . '{print $1"."$2+1"."$3"."$4}'  )
+
+echo "
+DEVICE=eth1
+BOOTPROTO=static
+IPADDR=$IB_IP
+NETMASK=$NETMASK
+ONBOOT=yes
+TYPE=Ethernet
+
+"  > $TARGET 
+
+############################
+

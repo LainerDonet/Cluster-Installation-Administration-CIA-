@@ -1,0 +1,9 @@
+
+cat<<EOF >> /etc/rsyslog.d/cia.conf
+# Provides UDP forwarding. The IP is the server's IP address
+*.* @master:514 
+
+# Provides TCP forwarding. But the current server runs on UDP
+# *.* @master:514
+
+EOF

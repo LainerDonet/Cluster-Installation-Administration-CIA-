@@ -1,0 +1,28 @@
+#!/bin/bash -x 
+
+if grep -q -w CIA.NFS /proc/cmdline ; then exit ; fi 
+
+
+echo "lustre.* skip" >> /etc/xattr.conf
+
+[ -d  $CIA_ROOT/cia_utils/RPMS/$(uname -i)/lustre/kernel/update ] && rpm -Uvh $CIA_ROOT/cia_utils/RPMS/$(uname -i)/lustre/kernel/update/*.rpm
+[ -d  $CIA_ROOT/cia_utils/RPMS/$(uname -i)/lustre/kernel ] && rpm -ivh $CIA_ROOT/cia_utils/RPMS/$(uname -i)/lustre/kernel/*.rpm
+
+[ -d $CIA_ROOT/cia_utils/RPMS/$(uname -i)/lustre/client ] && rpm -ivh $CIA_ROOT/cia_utils/RPMS/$(uname -i)/lustre/client/*.rpm
+
+rm /etc/init.d/lnet 
+rm /etc/init.d/lustre
+cp $CIA_ROOT/config/files/all/lustre-client /etc/init.d/
+cp $CIA_ROOT/config/files/all/rdma /etc/init.d/
+chkconfig --add lustre-client
+chkconfig lustre-client on 
+
+cp -v $CIA_ROOT/config/files/all/mount.lustre /root
+cp -v $CIA_ROOT/config/files/all/umount.lustre /root
+
+rmdir /home
+mkdir -p /LUSTRE/home 
+ln -vs /LUSTRE/home /home
+#ln -vs /LUSTRE/data /data
+
+

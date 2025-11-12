@@ -1,0 +1,256 @@
+#!/bin/bash 
+
+FUNC_VER=$(centos_version)
+
+setupRepoHttp(){
+
+case $FUNC_VER in
+
+6)
+	setupRepoHttp6 $*
+;;
+
+7)
+	setupRepoHttp7 $*
+;;
+
+*)
+	echoerr "Version no soportada"
+	exit 2
+;;
+esac 
+
+}
+
+setupKickstartHttpd(){
+
+case $FUNC_VER in
+
+6)
+	setupKickstartHttpd6 $*
+;;
+
+7)
+	setupKickstartHttpd7 $*
+;;
+
+*)
+	echoerr "Version no soportada"
+	exit 2
+;;
+esac 
+
+
+}
+
+setupHplHttp(){
+
+case $FUNC_VER in
+
+6)
+	setupHplHttp6 $*
+;;
+
+7)
+	setupHplHttp7 $*
+;;
+
+*)
+	echoerr "Version no soportada"
+	exit 2
+;;
+esac 
+
+}
+
+setupKickstartHttpd(){
+
+case $FUNC_VER in
+
+6)
+	setupKickstartHttpd6 $*
+;;
+
+7)
+	setupKickstartHttpd7 $*
+;;
+
+*)
+	echoerr "Version no soportada"
+	exit 2
+;;
+esac 
+
+}
+
+logHttpStatusInstall(){
+FUNC_VER=6
+case $FUNC_VER in
+
+6)
+        logHttpStatusInstall6 $*
+;;
+
+7)
+        logHttpStatusInstall7 $*
+;;
+
+*)
+        echoerr "Version no soportada"
+        exit 2
+;;
+esac
+
+
+}
+
+setupRepoHttp7(){
+LOCAL_DIR=$1
+MASTER_NETWORK=$2
+MASTER_NETMASK=$3
+
+cat <<END
+Alias /cia-repo $LOCAL_DIR
+<Directory $LOCAL_DIR >
+    AllowOverride None
+    Require all granted
+    Options Indexes FollowSymLinks
+    Order deny,allow
+    Deny from all
+    Allow from 127.0.0.1
+    Allow from $MASTER_NETWORK/$MASTER_NETMASK
+</Directory>
+
+END
+
+
+}
+
+setupRepoHttp6(){
+LOCAL_DIR=$1
+MASTER_NETWORK=$2
+MASTER_NETMASK=$3
+cat <<END
+Alias /cia-repo $LOCAL_DIR
+<Location /cia-repo>
+    Options Indexes
+    Order deny,allow
+    Deny from all
+    Allow from 127.0.0.1
+    Allow from $MASTER_NETWORK/$MASTER_NETMASK
+</Location>
+END
+
+}
+
+setupKickstartHttpd6(){                                      
+KS_ROOT=$1                                                  
+MASTER_NETWORK=$2                                           
+MASTER_NETMASK=$3                                           
+                                                            
+mkdir -p $KS_ROOT/kickstart                                 
+                                                            
+cat <<END                                                   
+                                                            
+Alias /cia-kickstart $KS_ROOT/kickstart                     
+<Location /cia-kickstart>                                   
+    Options Indexes                                         
+    Order deny,allow                                        
+    Deny from all                                           
+    Allow from 127.0.0.1                                    
+    Allow from $MASTER_NETWORK/$MASTER_NETMASK              
+</Location>                                                 
+                                                            
+END
+                                                            
+}                                                           
+
+setupHplHttp6(){      
+KS_ROOT=$1
+MASTER_NETWORK=$2
+MASTER_NETMASK=$3
+
+
+cat <<END
+
+Alias /cia-hpl $KS_ROOT/cia-utils/bin
+<Location /cia-kickstart>    
+    Options Indexes
+    Order deny,allow
+    Deny from all
+    Allow from 127.0.0.1     
+    Allow from $MASTER_NETWORK/$MASTER_NETMASK
+</Location>
+
+END
+
+}
+
+
+setupHplHttp7(){
+KS_ROOT=$1
+MASTER_NETWORK=$2
+MASTER_NETMASK=$3
+
+#mkdir -p $KS_ROOT/kickstart
+
+cat <<END
+
+Alias /cia-hpl $KS_ROOT/cia_utils/bin
+<Directory $KS_ROOT/cia_utils >
+    AllowOverride None
+    Require all granted
+    Options Indexes FollowSymLinks
+    Order deny,allow
+    Deny from all   
+    Allow from 127.0.0.1
+    Allow from $MASTER_NETWORK/$MASTER_NETMASK
+</Directory>
+
+END
+
+}
+
+
+setupKickstartHttpd7(){                              
+KS_ROOT=$1                                          
+MASTER_NETWORK=$2                                   
+MASTER_NETMASK=$3                                   
+                                                    
+mkdir -p $KS_ROOT/kickstart                         
+                                                    
+cat <<END                                           
+                                                    
+Alias /cia-kickstart $KS_ROOT/kickstart             
+<Directory $KS_ROOT/kickstart >                     
+    AllowOverride None                              
+    Require all granted                             
+    Options Indexes FollowSymLinks                  
+    Order deny,allow                                
+    Deny from all                                   
+    Allow from 127.0.0.1                            
+    Allow from $MASTER_NETWORK/$MASTER_NETMASK      
+</Directory>                                        
+                                                    
+END
+                                                    
+}                                                   
+
+
+logHttpStatusKs(){
+
+tail -f /var/log/httpd/access_log | while :; do sleep 1; grep -m 1 cia-kickstart && break; done 
+
+}
+
+logHttpStatusInstall6(){
+#tail -f /var/log/httpd/access_log | 
+while :; do usleep 100; tail  /var/log/httpd/access_log  | grep -m 1 install.img  && break; done      
+}
+logHttpStatusInstall7(){
+while :; do sleep 1; grep -m 1 squashfs.img  /var/log/httpd/access_log && break; done
+killall -TERM dnsmasq &>/dev/null
+
+}
+
+

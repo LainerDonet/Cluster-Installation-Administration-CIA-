@@ -1,0 +1,27 @@
+#
+# Create queues and set their attributes.
+#
+#
+#
+create queue workq
+set queue workq queue_type = Execution
+set queue workq enabled = True
+set queue workq started = True
+#
+# Set server attributes.
+#
+set server scheduling = True
+set server acl_roots = root
+set server default_queue = workq
+set server log_events = 511
+set server mail_from = adm
+set server query_other_jobs = True
+set server resources_default.neednodes = 1
+set server scheduler_iteration = 60
+set server node_ping_rate = 380
+set server node_check_rate = 600
+set server tcp_timeout = 240
+set server job_stat_rate = 120
+set server poll_jobs = True
+set server node_pack = True
+set server next_job_number = 0

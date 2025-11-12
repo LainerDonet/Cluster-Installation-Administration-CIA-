@@ -1,0 +1,5 @@
+default localboot
+display display.msg
+
+label localboot
+        LOCALBOOT 0

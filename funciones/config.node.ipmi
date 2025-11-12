@@ -1,0 +1,56 @@
+#!/bin/bash 
+trap exit 1 2 5  
+
+[ -z $CIA_ROOT  ] && echo CIA_ROOT sin definir && exit 
+
+. $CIA_ROOT/funciones/funciones.cia
+trap "exit 1" 1 2 5
+
+NODE_NAME=$1
+NODE_IP=$2 
+INSTALL_DEVICE=$3
+NODE_IPMI=$4
+
+CIA_INSTALL_DEVICE=$INSTALL_DEVICE
+NODE_NAME=$NODE_NAME-ipmi
+
+if [ ! -z $NODE_IPMI ] ;then
+IPMI_IP=$NODE_IPMI
+else
+IPMI_IP=$(returnIpmiIP $NODE_IP)
+fi
+
+NETWORK_IPMI=$(returnNetworkIP $IPMI_IP)
+
+
+while :; do
+echo "Waiting data for node $NODE_NAME ..."                                     
+DATA=($(returnDhcpInfo $INSTALL_DEVICE 2>/dev/null  ))
+                                     
+DHCP_MESS=${DATA[0]}                 
+MAC_IPMI=${DATA[1]}              
+DHCP_CLIENT=${DATA[2]}               
+
+if [ "$DHCP_CLIENT" == "udhcp" ] ; then
+
+echo "$DHCP_MESS: Write configuration for $NODE_NAME ($MAC_IPMI) " 
+
+break 
+else 
+
+echo -e "\t++++++Ignoring $DHCP_MESS with Vendor $DHCP_CLIENT -> $MAC_IPMI"
+sleep 1
+continue
+fi 
+
+done 
+
+start_dhcp $CIA_INSTALL_DEVICE $NETWORK_IPMI $MAC_IPMI $NODE_NAME $IPMI_IP
+[ $? -ne 0 ] && exit 1
+
+echo "Set $IPMI_IP  IPMI IP Static  & boot PXE  
+sleep 5 sec"
+sleep 5  && ping -c 5 $IPMI_IP &&  setIpmiStatic $IPMI_IP && setIpmiUid15 $IPMI_IP 
+
+
+

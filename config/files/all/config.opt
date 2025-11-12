@@ -1,0 +1,12 @@
+#!/bin/bash 
+
+if grep -q -w CIA.LUSTRE /proc/cmdline ; then exit ; fi
+
+
+mv /opt /old.opt
+
+echo "opt      --fstype=nfs,nfsvers=3,tcp,rsize=8192,wsize=8192,hard,intr,timeo=600,ro nfsmaster:/opt" >> /etc/storage.cia 
+
+ln -vs /NFS/opt / 
+
+

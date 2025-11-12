@@ -1,0 +1,20 @@
+#!/bin/bash 
+
+. /cia/config/cia.conf 
+SOURCE=/etc/sysconfig/network-scripts/ifcfg-eth0
+TARGET=/etc/sysconfig/network-scripts/ifcfg-eth0
+
+source $SOURCE
+
+echo "
+DEVICE=eth0
+IPADDR=$IPADDR
+NETMASK=$NETMASK
+GATEWAY=$CIA_MASTER_IP
+BOOTPROTO=static
+NM_CONTROLLED=no
+ONBOOT=yes
+TYPE=Ethernet
+
+"  > $TARGET 
+

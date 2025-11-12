@@ -1,0 +1,30 @@
+#!/bin/bash
+trap exit 1 2 5  
+
+[ -z $CIA_ROOT ] && exit
+
+. $CIA_ROOT/funciones/funciones.cia
+
+
+NODE_IP=$1
+REPO_DIR=$2
+ROOT_DIR=$3
+
+HTTP_CONFIG=/etc/httpd/conf.d/cia-repo.conf
+HTTP_KS_CONFIG=/etc/httpd/conf.d/cia-kickstart.conf
+
+NODE_NETMASK=$(returnNetmaskIP $NODE_IP)
+NODE_NETWORK=$(returnNetworkIP $NODE_IP)
+
+
+#establecer directorio local
+
+setupRepoHttp $REPO_DIR $NODE_NETWORK $NODE_NETMASK > $HTTP_CONFIG
+
+setupHplHttp $CIA_ROOT $NODE_NETWORK $NODE_NETMASK >> $HTTP_CONFIG
+
+setupKickstartHttpd $ROOT_DIR $NODE_NETWORK $NODE_NETMASK > $HTTP_KS_CONFIG
+
+service httpd restart 
+exit $?
+

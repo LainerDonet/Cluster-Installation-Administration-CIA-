@@ -1,0 +1,32 @@
+#!/bin/bash
+
+CIA_ROOT=$(dirname $PWD)
+CIA_MASTER_HOSTNAME=$(hostname)
+CIA_REPO_FILE=/etc/httpd/conf.d/cia-repo.conf
+CIA_KS_FILE=/etc/httpd/conf.d/cia-kickstart.conf
+export CIA_ROOT 
+export CI_ROOT=$CIA_ROOT/cluster_install
+export CA_ROOT=$CIA_ROOT/cluster_admin  
+
+################################################################################
+. $CIA_ROOT/funciones/funciones.cia
+################################################################################
+
+[ ! -e $CIA_ROOT/cia_utils/RPMS/x86_64 ] && usage "El directorio $CIA_ROOT/cia_utils/RPMS/x86_64 no existe." 
+[ ! -e $CIA_ROOT/cia_utils/RPMS/noarch ] && usage "El directorio $CIA_ROOT/cia_utils/RPMS/noarch no existe." 
+
+for file in $CIA_ROOT/cia_utils/RPMS/noarch/*.rpm 
+do rpm -ivh $file 
+done 
+
+#rpm -Uvh $CIA_ROOT/cia_utils/RPMS/x86_64/admin/update/*.rpm 
+#rpm -ivh $CIA_ROOT/cia_utils/RPMS/x86_64/admin/tmux/*.rpm 
+cp $CIA_ROOT/config/files/all/tmux.conf /etc
+
+#for file in $CIA_ROOT/cia_utils/RPMS/x86_64/admin/*.rpm 
+#do rpm -ivh $file
+#done 
+
+rpm -ivh $CIA_ROOT/cia_utils/RPMS/x86_64/admin/*.rpm 
+
+

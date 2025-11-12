@@ -1,0 +1,90 @@
+#!/bin/bash
+
+CIA_ROOT=$(dirname $PWD)
+CIA_MASTER_HOSTNAME=$(hostname)
+CIA_REPO_FILE=/etc/httpd/conf.d/cia-repo.conf
+CIA_KS_FILE=/etc/httpd/conf.d/cia-kickstart.conf
+export CIA_ROOT 
+export CI_ROOT=$CIA_ROOT/cluster_install
+export CA_ROOT=$CIA_ROOT/cluster_admin  
+
+################################################################################
+. $CIA_ROOT/funciones/funciones.cia
+################################################################################
+
+[ ! -e $CIA_ROOT/cia_utils/RPMS/x86_64 ] && usage "El directorio $CIA_ROOT/cia_utils/RPMS/x86_64 no existe." 
+[ ! -e $CIA_ROOT/cia_utils/RPMS/noarch ] && usage "El directorio $CIA_ROOT/cia_utils/RPMS/noarch no existe." 
+
+rpm -Uvh $CIA_ROOT/cia_utils/RPMS/x86_64/ganglia/*.rpm 
+
+
+echo "#########################################
+Configuración inicial GANGLIA
+#########################################"
+rm -f /etc/ganglia/conf.d/* 
+
+cp $CIA_ROOT/config/files/all/gmond.conf /etc/ganglia/ 
+
+echo "  
+cluster {
+  name = $CIA_CLUSTER_NAME-MASTER
+  owner = Linux
+  latlong = unspecified
+  url = unspecified
+}
+
+udp_send_channel {
+  mcast_if = $CIA_INSTALL_DEVICE 
+  mcast_join = 239.2.11.71
+  port = 8640
+  ttl = 1
+}
+
+udp_recv_channel {
+  mcast_if = $CIA_INSTALL_DEVICE
+  mcast_join = 239.2.11.71
+  port = 8640
+  bind = 239.2.11.71
+  retry_bind = true
+  buffer = 10485760
+}
+
+tcp_accept_channel {
+  port = 8640
+  gzip_output = no
+}
+" >/etc/ganglia/conf.d/node.conf
+
+echo "setuid_username ganglia
+case_sensitive_hostnames 0
+gridname $CIA_CLUSTER_NAME" > /etc/ganglia/gmetad.conf
+echo "data_source $CIA_CLUSTER_NAME-MASTER  master:8640" >> /etc/ganglia/gmetad.conf 
+echo "data_source $CIA_CLUSTER_NAME-NODES  node1:8642" >> /etc/ganglia/gmetad.conf 
+#echo "data_source $CIA_CLUSTER_NAME-LUSTRE  mds1:8641" >> /etc/ganglia/gmetad.conf 
+
+#cat /etc/ganglia/gmetad.conf /etc/ganglia/conf.d/master.conf
+
+echo "#
+# Ganglia monitoring system php web frontend
+#
+
+Alias /ganglia /usr/share/ganglia
+
+<Location /ganglia>
+  Require local
+  AllowOverride None
+  Require all granted
+
+  # Require ip 10.1.2.3
+  # Require host example.org
+</Location>
+">/etc/httpd/conf.d/ganglia.conf
+
+chkconfig gmetad on
+chkconfig gmond on
+service httpd restart
+service gmond restart 
+service gmetad restart
+
+
+

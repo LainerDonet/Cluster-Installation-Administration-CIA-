@@ -1,0 +1,66 @@
+#!/bin/bash  
+
+INSTALL_DEVICE=$1
+PROG=/usr/sbin/dhcpd 
+
+up_dhcpd(){
+
+pid=$(pidof dhcpd)
+if [ "$pid" == "" ];then
+	 $PROG -q -t $1 
+	if [ $? -gt 0 ] ;then 
+	echo "cluster_dhcpd: error, press enter to view log " 
+	read
+	$PROG -t
+	exit 255
+	else 
+	 	service dhcpd start  
+	 	echo "dhcpd (pid=$(pidof dhcpd)) listen on $1" 
+	fi
+else
+	 	echo "dhcpd server is running (pid=$pid)"  
+
+fi
+
+}
+
+################################################################################
+down_dhcpd(){
+
+if [ "$(pidof dhcpd)" == "" ];then
+	echo "no dhcpd server running"
+	return
+fi
+
+for pid in $(pidof dhcpd); do 
+	service dhcpd stop  && echo "dhcpd (pid=$pid) stop"  
+
+done
+sleep 2
+
+}
+
+case $2 in 
+start)
+        up_dhcpd $INSTALL_DEVICE
+
+        ;;
+
+stop)
+        down_dhcpd
+        ;;
+
+restart)
+        down_dhcpd
+        up_dhcpd $INSTALL_DEVICE
+        ;;
+*)
+echo "usage cluster_dhcp {start|stop|restart}"
+;;
+
+esac
+
+exit $?
+
+
+

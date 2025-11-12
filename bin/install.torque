@@ -1,0 +1,68 @@
+#!/bin/bash
+
+CIA_ROOT=$(dirname $PWD)
+CIA_MASTER_HOSTNAME=$(hostname)
+CIA_REPO_FILE=/etc/httpd/conf.d/cia-repo.conf
+CIA_KS_FILE=/etc/httpd/conf.d/cia-kickstart.conf
+export CIA_ROOT 
+export CI_ROOT=$CIA_ROOT/cluster_install
+export CA_ROOT=$CIA_ROOT/cluster_admin  
+
+################################################################################
+. $CIA_ROOT/funciones/funciones.cia
+################################################################################
+
+[ ! -e $CIA_ROOT/cia_utils/RPMS/x86_64 ] && usage "El directorio $CIA_ROOT/cia_utils/RPMS/x86_64 no existe." 
+[ ! -e $CIA_ROOT/cia_utils/RPMS/noarch ] && usage "El directorio $CIA_ROOT/cia_utils/RPMS/noarch no existe." 
+
+
+rpm -ivh  $CIA_ROOT/cia_utils/RPMS/x86_64/munge/*.rpm 
+rpm -ivh  $CIA_ROOT/cia_utils/RPMS/x86_64/torque/*.rpm 
+rpm -ivh  $CIA_ROOT/cia_utils/RPMS/x86_64/maui/*.rpm 
+
+echo "$pbsserver pbsmaster
+$usecp *:/home /home
+" > /etc/torque/mom/config
+
+echo "nodes=0-1" > /etc/torque/mom/mom.layout 
+
+[ -e /etc/init.d/pbs_mom ] && chkconfig pbs_mom off 
+chkconfig munge on
+chkconfig pbs_server on
+chkconfig maui on 
+
+sha512sum < /etc/passwd | cut -d" " -f1  >/etc/munge/munge.key 
+chmod 0400 /etc/munge/munge.key
+chown munge:munge /etc/munge/munge.key  
+ 
+hostname > /var/lib/torque//server_name
+service pbs_mom stop
+service pbs_server stop 
+service munge restart
+pkill  pbs_server 
+pbs_server -t create -f 
+
+service trqauthd stop
+service trqauthd start
+service pbs_server stop
+pgrep -l pbs_server
+sleep 3
+pkill  pbs_server 
+sleep 3
+service pbs_server start
+sleep 3
+echo "
+#########################################
+Configuración inicial TORQUE
+#########################################"
+
+qmgr < $CIA_ROOT/config/files/all/workq 
+
+echo "#########################################
+Configuración inicial MAUI 
+#########################################"
+echo "SERVERHOST              $HOSTNAME"  > /var/spool/maui/maui.cfg
+cat $CIA_ROOT/config/files/all/maui.cfg >> /var/spool/maui/maui.cfg
+#cat /var/spool/maui/maui.cfg
+
+
